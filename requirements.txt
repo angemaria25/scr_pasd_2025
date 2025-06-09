@@ -1,0 +1,7 @@
+ray[default]
+scikit-learn
+fastapi
+uvicorn
+joblib
+pandas
+streamlit
