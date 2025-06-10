@@ -1,7 +1,6 @@
-ray[default]
+ray
 scikit-learn
-fastapi
-uvicorn
-joblib
+flask
 pandas
-streamlit
+numpy
+

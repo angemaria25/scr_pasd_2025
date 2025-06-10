@@ -1,39 +1,18 @@
-version: '3.8'
+version: '3'
 services:
-  ray-head:
-    image: rayproject/ray:latest
-    command: ray start --head --dashboard-host 0.0.0.0
-    ports:
-      - "8265:8265"
-      - "6379:6379"
-
-  ray-worker:
-    image: rayproject/ray:latest
-    depends_on:
-      - ray-head
-    command: ray start --address=ray-head:6379
-
-  trainer:
-    build:
-      context: .
+  entrenamiento:
+    build: ./training
+    container_name: training_container
+    command: ["python", "train.py"]
     volumes:
-      - ./data:/mnt/data
-    command: python trainer/train.py
+      - ./training/data:/app/data
     depends_on:
-      - ray-head
-
+      - api
+  
   api:
-    build:
-      context: ./api
+    build: ./api
+    container_name: api_container
     ports:
-      - "8000:8000"
-    volumes:
-      - ./data:/tmp
+      - "5000:5000"
     depends_on:
-      - trainer
-
-  dashboard:
-    build:
-      context: ./dashboard
-    ports:
-      - "8501:8501"
+      - entrenamiento
