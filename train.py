@@ -67,32 +67,26 @@ class ModelTrainer:
         numeric_cols = X_sample.select_dtypes(include=['int64', 'float64']).columns.tolist()
         categorical_cols = X_sample.select_dtypes(include=['object', 'category']).columns.tolist()
 
-        # Preprocesamiento para columnas numéricas
         numeric_transformer = Pipeline(steps=[
             ('imputer', SimpleImputer(strategy='mean')),  # imputa NaNs con la media
             ('scaler', StandardScaler())
         ])
 
-        # Preprocesamiento para columnas categóricas
         categorical_transformer = Pipeline(steps=[
             ('imputer', SimpleImputer(strategy='most_frequent')),  # imputa NaNs con la moda
             ('encoder', OneHotEncoder(handle_unknown='ignore'))
         ])
 
-        # Aplicar transformaciones
         preprocessor = ColumnTransformer(transformers=[
             ('num', numeric_transformer, numeric_cols),
             ('cat', categorical_transformer, categorical_cols)
         ])
 
-        # Pipeline final
         return Pipeline(steps=[
             ('preprocessor', preprocessor),
             ('model', self.model)
         ])
 
-        
-    
     def train(self, X_train, y_train):
         """Entrena el modelo"""
         pipeline = self._build_pipeline(X_train)
@@ -115,13 +109,13 @@ def main():
         return
     
     try:
-        #Carga de datos
+
         data_loader = DataLoader.remote()
         X_train, X_test, y_train, y_test = ray.get(data_loader.get_train_test.remote(0.2))
         print("Datos cargados y divididos correctamente")
         logging.info("Datos cargados. Train: %s, Test: %s", X_train.shape, X_test.shape)
         
-        #Cargar configuración de modelos
+        
         with open('config/models.json') as f:
             models_config = json.load(f)
             print("Configuraciones de modelos cargadas")
@@ -151,9 +145,7 @@ def main():
     except Exception as e:
         logging.error("Error en main: %s", str(e), exc_info=True)
     finally:
-        pass 
-        #ray.shutdown()
-        #print("Ray apagado correctamente")
-
+        ray.shutdown()
+        
 if __name__ == "__main__":
     main()
