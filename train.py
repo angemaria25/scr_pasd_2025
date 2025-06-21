@@ -5,12 +5,14 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 import joblib
 import logging
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,14 +58,44 @@ class ModelTrainer:
         elif self.model_name == "SVC":
             return SVC(**self.model_params)
         else:
+            print(f"Modelo recibido: {self.model_name}")
             raise ValueError(f"Modelo '{self.model_name}' no está soportado.")
+    
+    
+    def _build_pipeline(self, X_sample):
+        # Identifica columnas numéricas y categóricas
+        numeric_cols = X_sample.select_dtypes(include=['int64', 'float64']).columns.tolist()
+        categorical_cols = X_sample.select_dtypes(include=['object', 'category']).columns.tolist()
+
+        # Preprocesamiento para columnas numéricas
+        numeric_transformer = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='mean')),  # imputa NaNs con la media
+            ('scaler', StandardScaler())
+        ])
+
+        # Preprocesamiento para columnas categóricas
+        categorical_transformer = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='most_frequent')),  # imputa NaNs con la moda
+            ('encoder', OneHotEncoder(handle_unknown='ignore'))
+        ])
+
+        # Aplicar transformaciones
+        preprocessor = ColumnTransformer(transformers=[
+            ('num', numeric_transformer, numeric_cols),
+            ('cat', categorical_transformer, categorical_cols)
+        ])
+
+        # Pipeline final
+        return Pipeline(steps=[
+            ('preprocessor', preprocessor),
+            ('model', self.model)
+        ])
+
+        
     
     def train(self, X_train, y_train):
         """Entrena el modelo"""
-        pipeline = Pipeline([
-            ('scaler', StandardScaler()),
-            ('clf', self.model)
-        ])
+        pipeline = self._build_pipeline(X_train)
         pipeline.fit(X_train, y_train)
         return pipeline
     
@@ -109,7 +141,6 @@ def main():
             model = ray.get(future)
             acc = ray.get(trainer.evaluate.remote(model, X_test, y_test))
             trained_models[name] = (model, acc)
-            print(f"Modelo: {name}, Accuracy: {acc:.4f}")
             logging.info("Modelo '%s' entrenado. Accuracy: %.4f", name, acc)
 
         os.makedirs("models", exist_ok=True)
