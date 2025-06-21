@@ -13,13 +13,15 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
+import time
+from ray.exceptions import ActorDiedError
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-@ray.remote
+@ray.remote(max_restarts=3, max_task_retries=3)
 class DataLoader:
     def __init__(self, data_dir="data"):
         """Carga automática de archivos CSV o JSON"""
@@ -42,7 +44,7 @@ class DataLoader:
         y = self.data['target']
         return train_test_split(X, y, test_size=test_size, random_state=42)
 
-@ray.remote
+@ray.remote(max_restarts=3, max_task_retries=3)
 class ModelTrainer:
     def __init__(self, model_name, model_params):
         self.model_name = model_name
@@ -58,9 +60,7 @@ class ModelTrainer:
         elif self.model_name == "SVC":
             return SVC(**self.model_params)
         else:
-            print(f"Modelo recibido: {self.model_name}")
             raise ValueError(f"Modelo '{self.model_name}' no está soportado.")
-    
     
     def _build_pipeline(self, X_sample):
         # Identifica columnas numéricas y categóricas
@@ -98,6 +98,18 @@ class ModelTrainer:
         preds = model.predict(X_test)
         acc = accuracy_score(y_test, preds)
         return acc
+    
+def create_and_train_model(name, params, X_train, y_train, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            trainer = ModelTrainer.remote(name, params)
+            future = trainer.train.remote(X_train, y_train)
+            model = ray.get(future)
+            return trainer, model
+        except ActorDiedError as e:
+            print(f"[INTENTO {attempt+1}] El actor falló. Reintentando...")
+            time.sleep(2) 
+    raise RuntimeError(f"[ERROR] El modelo {name} falló incluso después de reintentos.")
 
 def main():
     try:
@@ -109,12 +121,10 @@ def main():
         return
     
     try:
-
         data_loader = DataLoader.remote()
         X_train, X_test, y_train, y_test = ray.get(data_loader.get_train_test.remote(0.2))
         print("Datos cargados y divididos correctamente")
         logging.info("Datos cargados. Train: %s, Test: %s", X_train.shape, X_test.shape)
-        
         
         with open('config/models.json') as f:
             models_config = json.load(f)
@@ -122,21 +132,18 @@ def main():
             print(models_config)
         logging.info("%d modelos configurados", len(models_config))
         
-        futures = []
+        trained_models = {}
         for config in models_config:
             name = config["name"]
             params = config.get("params", {})
-            trainer = ModelTrainer.remote(name, params)
-            future = trainer.train.remote(X_train, y_train)
-            futures.append((name, trainer, future))
-            
-        trained_models = {}
-        for name, trainer, future in futures:
-            model = ray.get(future)
-            acc = ray.get(trainer.evaluate.remote(model, X_test, y_test))
-            trained_models[name] = (model, acc)
-            logging.info("Modelo '%s' entrenado. Accuracy: %.4f", name, acc)
-
+            try:
+                trainer, model = create_and_train_model(name, params, X_train, y_train)
+                acc = ray.get(trainer.evaluate.remote(model, X_test, y_test))
+                trained_models[name] = (model, acc)
+                logging.info("Modelo '%s' entrenado. Accuracy: %.4f", name, acc)
+            except Exception as e:
+                print(f"[ERROR] El modelo {name} falló incluso después de reintentos: {e}")
+        
         os.makedirs("models", exist_ok=True)
         for name, (model, acc) in trained_models.items():
             joblib.dump(model, f"models/{name}.pkl")
