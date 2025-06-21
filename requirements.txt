@@ -1,6 +1,9 @@
-ray
+ray[default,data,train,tune,serve]>=2.4
 scikit-learn
-flask
 pandas
 numpy
-
+pyarrow
+fastapi
+uvicorn
+joblib
+matplotlib

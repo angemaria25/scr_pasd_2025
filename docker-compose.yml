@@ -1,18 +1,53 @@
-version: '3'
 services:
-  entrenamiento:
-    build: ./training
-    container_name: training_container
-    command: ["python", "train.py"]
-    volumes:
-      - ./training/data:/app/data
-    depends_on:
-      - api
-  
-  api:
-    build: ./api
-    container_name: api_container
+  ray-head:
+    build: .
+    container_name: ray-head
+    command: bash -c "
+      ray start --head --port=6379 --dashboard-host=0.0.0.0 &&
+      echo 'Nodo HEAD en marcha y escuchando en puertos 6379 y 8265' &&
+      tail -f /dev/null"
     ports:
-      - "5000:5000"
+      - "6379:6379"   
+      - "8265:8265"  
+    networks:
+      - ray-net
+    shm_size: 1gb
+    cpus: 2
+    volumes:
+      - .:/app
+    
+  ray-worker-1:
+    build: .
+    container_name: ray-worker-1
+    command: bash -c "
+      ray start --address=ray-head:6379 &&
+      echo 'Worker 1 conectado al HEAD' &&
+      tail -f /dev/null"
     depends_on:
-      - entrenamiento
+      - ray-head
+    networks:
+      - ray-net
+    shm_size: 1gb
+    cpus: 1
+    volumes:
+      - .:/app
+
+  ray-worker-2:
+    build: .
+    container_name: ray-worker-2
+    command:  bash -c "
+      ray start --address=ray-head:6379 &&
+      echo 'Worker 2 conectado al HEAD' &&
+      tail -f /dev/null"
+    depends_on:
+      - ray-head
+    networks:
+      - ray-net
+    shm_size: 1gb
+    cpus: 1
+    volumes:
+      - .:/app
+
+networks:
+  ray-net:
+

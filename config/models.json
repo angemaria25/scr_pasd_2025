@@ -1,0 +1,22 @@
+[
+    {
+        "name": "RandomForest",
+        "params": {
+            "n_estimators": 100,
+            "max_depth": 5
+        }
+    },
+    {
+        "name": "SVM",
+        "params": {
+            "kernel": "linear"
+        }
+    },
+    {
+        "name": "LogisticRegression",
+        "params": {
+        "penalty": "l2",
+        "C": 1.0
+        }
+    }
+]
