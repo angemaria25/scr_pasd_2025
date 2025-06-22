@@ -99,19 +99,8 @@ class ModelTrainer:
         acc = accuracy_score(y_test, preds)
         return acc
     
-#def create_and_train_model(name, params, X_train, y_train, max_retries=3):
-    #for attempt in range(max_retries):
-        #try:
-            #trainer = ModelTrainer.remote(name, params)
-            #future = trainer.train.remote(X_train, y_train)
-            #model = ray.get(future)
-            #return trainer, model
-        #except ActorDiedError as e:
-            #print(f"[INTENTO {attempt+1}] El actor falló. Reintentando...")
-            #time.sleep(2) 
-    #raise RuntimeError(f"[ERROR] El modelo {name} falló incluso después de reintentos.")
 
-@ray.remote
+@ray.remote 
 def safe_train(name, params, X_train, y_train, X_test, y_test, retries=3):
     """Recrear actor manualmente en otro nodo"""
     for attempt in range(retries):
@@ -147,18 +136,6 @@ def main():
             print(models_config)
         logging.info("%d modelos configurados", len(models_config))
         
-        #trained_models = {}
-        #for config in models_config:
-            #name = config["name"]
-            #params = config.get("params", {})
-            #try:
-                #trainer, model = create_and_train_model(name, params, X_train, y_train)
-                #acc = ray.get(trainer.evaluate.remote(model, X_test, y_test))
-                #trained_models[name] = (model, acc)
-                #logging.info("Modelo '%s' entrenado. Accuracy: %.4f", name, acc)
-            #except Exception as e:
-                #print(f"[ERROR] El modelo {name} falló incluso después de reintentos: {e}")
-        
         #Lanzar todos los entrenamientos en paralelo
         futures = []
         for config in models_config:
@@ -173,11 +150,6 @@ def main():
         #Guardar modelos entrenados
         trained_models = {}
         os.makedirs("models", exist_ok=True)
-        
-        #for name, (model, acc) in trained_models.items():
-            #joblib.dump(model, f"models/{name}.pkl")
-            #logging.info("Modelo '%s' guardado en /models", name)
-        
         
         for name, model, acc in results:
             if model is not None:
