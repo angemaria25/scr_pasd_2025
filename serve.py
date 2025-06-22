@@ -87,15 +87,5 @@ def predecir(modelo: ModelosEnum, input_data: InputData):
         "prediccion": pred.tolist()
     }
     
-        #df = pd.DataFrame([input_data.data])
-        #pred = loaded_models[modelo].predict(df)
-        #return {
-            #"modelo": modelo,
-            #"entrada": input_data.data,
-            #"prediccion": pred.tolist()
-        #}
-    #except Exception as e:
-        #raise HTTPException(status_code=400, detail=f"Error al predecir: {str(e)}")
-    
 if __name__ == "__main__":
     uvicorn.run("serve:app", host="0.0.0.0", port=8000)
