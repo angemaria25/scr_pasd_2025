@@ -63,7 +63,7 @@ class ModelTrainer:
             raise ValueError(f"Modelo '{self.model_name}' no está soportado.")
     
     def _build_pipeline(self, X_sample):
-        # Identifica columnas numéricas y categóricas
+        #Identifica columnas numéricas y categóricas
         numeric_cols = X_sample.select_dtypes(include=['int64', 'float64']).columns.tolist()
         categorical_cols = X_sample.select_dtypes(include=['object', 'category']).columns.tolist()
 
@@ -102,8 +102,6 @@ class ModelTrainer:
             roc_auc = roc_auc_score(y_test, probas)
         except:
             roc_auc = None
-        #acc = accuracy_score(y_test, preds)
-        #return acc
         metrics = {
             "accuracy": accuracy_score(y_test, preds),
             "precision": precision_score(y_test, preds, zero_division=0),
@@ -121,8 +119,6 @@ def safe_train(name, params, X_train, y_train, X_test, y_test, retries=3):
         try:
             trainer = ModelTrainer.remote(name, params)
             model = ray.get(trainer.train.remote(X_train, y_train))
-            #acc = ray.get(trainer.evaluate.remote(model, X_test, y_test))
-            #return name, model, acc
             metrics = ray.get(trainer.evaluate.remote(model, X_test, y_test))
             return name, model, metrics
         except ActorDiedError:
@@ -151,7 +147,7 @@ def main():
             print(models_config)
         logging.info("%d modelos configurados", len(models_config))
         
-        #Lanzar todos los entrenamientos en paralelo
+        #Lanza todos los entrenamientos en paralelo
         futures = []
         for config in models_config:
             name = config["name"]
@@ -165,15 +161,6 @@ def main():
         #Guardar modelos entrenados
         trained_models = {}
         os.makedirs("models", exist_ok=True)
-        
-        #for name, model, acc in results:
-            #if model is not None:
-                #trained_models[name] = (model, acc)
-                #joblib.dump(model, f"models/{name}.pkl")
-                #logging.info("Modelo '%s' entrenado y guardado. Accuracy: %.4f", name, acc)
-            #else:
-                #logging.warning("El modelo '%s' falló después de varios intentos.", name)
-                
         os.makedirs("metrics", exist_ok=True)
 
         for name, model, metrics in results:

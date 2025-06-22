@@ -16,7 +16,6 @@ app = FastAPI(
 MODELS_DIR = "models"
 loaded_models = {}
 
-
 class ModelosEnum(str, Enum):
     LogisticRegression = "LogisticRegression"
     RandomForestClassifier = "RandomForestClassifier"
