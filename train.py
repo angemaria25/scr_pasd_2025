@@ -3,7 +3,7 @@ import json
 import os 
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 import joblib
@@ -96,10 +96,24 @@ class ModelTrainer:
     def evaluate(self, model, X_test, y_test):
         """Evalúa el modelo entrenado"""
         preds = model.predict(X_test)
-        acc = accuracy_score(y_test, preds)
-        return acc
+        
+        try:
+            probas = model.predict_proba(X_test)[:, 1]
+            roc_auc = roc_auc_score(y_test, probas)
+        except:
+            roc_auc = None
+        #acc = accuracy_score(y_test, preds)
+        #return acc
+        metrics = {
+            "accuracy": accuracy_score(y_test, preds),
+            "precision": precision_score(y_test, preds, zero_division=0),
+            "recall": recall_score(y_test, preds, zero_division=0),
+            "f1_score": f1_score(y_test, preds, zero_division=0),
+            "roc_auc": roc_auc,
+            "confusion_matrix": confusion_matrix(y_test, preds).tolist()
+        }
+        return metrics
     
-
 @ray.remote 
 def safe_train(name, params, X_train, y_train, X_test, y_test, retries=3):
     """Recrear actor manualmente en otro nodo"""
@@ -107,13 +121,14 @@ def safe_train(name, params, X_train, y_train, X_test, y_test, retries=3):
         try:
             trainer = ModelTrainer.remote(name, params)
             model = ray.get(trainer.train.remote(X_train, y_train))
-            acc = ray.get(trainer.evaluate.remote(model, X_test, y_test))
-            return name, model, acc
+            #acc = ray.get(trainer.evaluate.remote(model, X_test, y_test))
+            #return name, model, acc
+            metrics = ray.get(trainer.evaluate.remote(model, X_test, y_test))
+            return name, model, metrics
         except ActorDiedError:
             print(f"[{name}] Intento {attempt + 1} fallido por ActorDiedError. Reintentando...")
             time.sleep(2)
     return name, None, None
-
 
 def main():
     try:
@@ -151,15 +166,26 @@ def main():
         trained_models = {}
         os.makedirs("models", exist_ok=True)
         
-        for name, model, acc in results:
+        #for name, model, acc in results:
+            #if model is not None:
+                #trained_models[name] = (model, acc)
+                #joblib.dump(model, f"models/{name}.pkl")
+                #logging.info("Modelo '%s' entrenado y guardado. Accuracy: %.4f", name, acc)
+            #else:
+                #logging.warning("El modelo '%s' falló después de varios intentos.", name)
+                
+        os.makedirs("metrics", exist_ok=True)
+
+        for name, model, metrics in results:
             if model is not None:
-                trained_models[name] = (model, acc)
+                trained_models[name] = (model, metrics)
                 joblib.dump(model, f"models/{name}.pkl")
-                logging.info("Modelo '%s' entrenado y guardado. Accuracy: %.4f", name, acc)
+                with open(f"metrics/{name}_metrics.json", "w") as f:
+                    json.dump(metrics, f, indent=4)
+                logging.info("Modelo '%s' entrenado. Accuracy: %.4f", name, metrics["accuracy"])
             else:
                 logging.warning("El modelo '%s' falló después de varios intentos.", name)
-                
-                
+                        
     except Exception as e:
         logging.error("Error en main: %s", str(e), exc_info=True)
     finally:

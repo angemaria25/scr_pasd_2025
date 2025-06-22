@@ -51,7 +51,7 @@ services:
   model-api:
     build: .
     container_name: model-api
-    command:  bash -c "python serve.py"
+    command:  python serve.py
     ports:
       - "8000:8000"
     depends_on:
