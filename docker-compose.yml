@@ -3,7 +3,7 @@ services:
     build: .
     container_name: ray-head
     command: bash -c "
-      ray start --head --port=6379 --dashboard-host=0.0.0.0 &&
+      ray start --head --port=6379 --dashboard-host=0.0.0.0  --dashboard-port=8265 &&
       echo 'Nodo HEAD en marcha y escuchando en puertos 6379 y 8265' &&
       tail -f /dev/null"
     ports:
@@ -45,6 +45,33 @@ services:
       - ray-net
     shm_size: 1gb
     cpus: 1
+    volumes:
+      - .:/app
+
+  model-api:
+    build: .
+    container_name: model-api
+    command:  bash -c "python serve.py"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ray-head
+    networks:
+      - ray-net
+    volumes:
+      - .:/app
+
+  streamlit-app:
+    build: .
+    container_name: streamlit-app
+    command: bash -c "streamlit run monitoring.py --server.address=0.0.0.0 --server.port=8501"
+    depends_on:
+      - ray-head
+      - model-api
+    ports:
+      - "8501:8501"
+    networks:
+      - ray-net
     volumes:
       - .:/app
 
