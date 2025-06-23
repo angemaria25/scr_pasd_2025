@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime
 
 st.set_page_config(page_title="Monitoreo de Modelos", layout="wide")
 st.title("Visualización de Rendimiento de Modelos")
@@ -64,4 +65,35 @@ else:
             ax.set_xlabel(metrica)
             ax.set_ylabel("Modelo")
             st.pyplot(fig)
+            
+        
+    st.title("📡 Estadísticas de Inferencia en Producción")
+
+    log_path = "logs/inferencia.jsonl"
+    if not os.path.exists(log_path):
+        st.info("Aún no hay registros de inferencia.")
+    else:
+        with open(log_path, "r") as f:
+            registros = [json.loads(line) for line in f if line.strip()]
+        df_logs = pd.DataFrame(registros)
+        df_logs["timestamp"] = pd.to_datetime(df_logs["timestamp"])
+        df_logs = df_logs.sort_values("timestamp", ascending=False)
+
+        st.subheader("Últimas Inferencias Realizadas")
+        st.dataframe(df_logs[["timestamp", "modelo", "latencia_ms", "prediccion"]].head(10))
+
+        st.subheader("Distribución de Latencias")
+        fig1, ax1 = plt.subplots()
+        sns.histplot(df_logs["latencia_ms"], bins=20, kde=True, ax=ax1, color="orchid")
+        ax1.set_xlabel("Latencia (ms)")
+        ax1.set_ylabel("Frecuencia")
+        st.pyplot(fig1)
+
+        st.subheader("Distribución de Clases Predichas")
+        pred_labels = df_logs["prediccion"].apply(lambda x: x[0] if isinstance(x, list) else x)
+        fig2, ax2 = plt.subplots()
+        pred_labels.value_counts().plot(kind="bar", ax=ax2, color="lightgreen")
+        ax2.set_xlabel("Clase Predicha")
+        ax2.set_ylabel("Cantidad")
+        st.pyplot(fig2)
 

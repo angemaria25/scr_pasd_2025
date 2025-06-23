@@ -6,6 +6,8 @@ import pandas as pd
 from typing import Dict, Union
 import uvicorn
 from enum import Enum
+from datetime import datetime
+import time
 
 app = FastAPI(
     title="API de Predicción de Modelos Entrenados",
@@ -29,10 +31,10 @@ class PassengerFeatures(BaseModel):
     Age: float
     SibSp: int
     Parch: int
-    Ticket: str  # Acepta "PP 9549", "5", etc.
+    Ticket: str  
     Fare: float
-    Cabin: str   # Acepta "G6", "123", etc.
-    Embarked: Literal["S", "C", "Q"]  # O según el dataset
+    Cabin: str   
+    Embarked: str
 
 class InputData(BaseModel):
     data: PassengerFeatures
@@ -87,11 +89,27 @@ def predecir(modelo: ModelosEnum, input_data: InputData):
         df = df[expected_cols]
     except AttributeError:
         raise HTTPException(status_code=500, detail="El modelo cargado no contiene metainformación de entrada.")
-        
+    
+    start_time = time.time()
     try:
         pred = model.predict(df)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error al hacer predicción: {str(e)}")
+    end_time = time.time()
+    latency_ms = round((end_time - start_time) * 1000, 2)
+    
+    #Log de inferencia
+    log = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "modelo": modelo,
+        "input": input_data.data.dict(),
+        "prediccion": pred.tolist(),
+        "latencia_ms": latency_ms
+    }
+    
+    os.makedirs("logs", exist_ok=True)
+    with open("logs/inferencia.jsonl", "a") as f:
+        f.write(json.dumps(log) + "\n")
     
     return {
         "modelo": modelo,
