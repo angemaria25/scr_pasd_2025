@@ -20,29 +20,41 @@ class ModelosEnum(str, Enum):
     LogisticRegression = "LogisticRegression"
     RandomForestClassifier = "RandomForestClassifier"
     SVC = "SVC"
+    
+class PassengerFeatures(BaseModel):
+    PassengerId: int
+    Pclass: int
+    Name: str
+    Sex: Literal["male", "female"]
+    Age: float
+    SibSp: int
+    Parch: int
+    Ticket: str  # Acepta "PP 9549", "5", etc.
+    Fare: float
+    Cabin: str   # Acepta "G6", "123", etc.
+    Embarked: Literal["S", "C", "Q"]  # O según el dataset
 
 class InputData(BaseModel):
-    """Ejemplo para rellenar el form"""
-    data: Dict[str, Union[str, float, int]]
-    
+    data: PassengerFeatures
+
     class Config:
         schema_extra = {
             "example": {
                 "data": {
+                    "PassengerId": 11,
                     "Pclass": 3,
-                    "Name": "A",
+                    "Name": "B",
                     "Sex": "male",
-                    "Age": 22,
+                    "Age": 4,
                     "SibSp": 1,
-                    "Parch": 0,
-                    "Ticket": 5,
-                    "Fare": 7.25,
-                    "Cabin": 6,
+                    "Parch": 1,
+                    "Ticket": "PP 9549",
+                    "Fare": 16.7,
+                    "Cabin": "G6",
                     "Embarked": "S"
                 }
             }
         }
-    
 
 @app.on_event("startup")
 def load_models():

@@ -61,20 +61,6 @@ services:
     volumes:
       - .:/app
 
-  streamlit-app:
-    build: .
-    container_name: streamlit-app
-    command: bash -c "streamlit run monitoring.py --server.address=0.0.0.0 --server.port=8501"
-    depends_on:
-      - ray-head
-      - model-api
-    ports:
-      - "8501:8501"
-    networks:
-      - ray-net
-    volumes:
-      - .:/app
-
 networks:
   ray-net:
 
