@@ -1,18 +1,29 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import os
 import joblib
 import pandas as pd
-from typing import Dict, Union
+from typing import Dict, Union, Literal
 import uvicorn
 from enum import Enum
 from datetime import datetime
 import time
+import json
+from contextlib import asynccontextmanager
+from collections import OrderedDict
+
+#Manejo del ciclo de vida de la aplicación
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    #inicio (startup)
+    load_models()
+    yield
 
 app = FastAPI(
     title="API de Predicción de Modelos Entrenados",
     description="Esta API permite realizar predicciones con modelos previamente entrenados.",
-    version="1.0"
+    version="1.0",
+    lifespan=lifespan
 )
 
 MODELS_DIR = "models"
@@ -24,41 +35,40 @@ class ModelosEnum(str, Enum):
     SVC = "SVC"
     
 class PassengerFeatures(BaseModel):
-    PassengerId: int
-    Pclass: int
-    Name: str
-    Sex: Literal["male", "female"]
-    Age: float
-    SibSp: int
-    Parch: int
-    Ticket: str  
-    Fare: float
-    Cabin: str   
-    Embarked: str
+    PassengerId: int = Field(..., title="Passenger ID", description="Identificador único del pasajero")
+    Pclass: int = Field(..., title="Clase", description="Clase en la que viajaba el pasajero (1, 2 o 3)")
+    Name: str = Field(..., title="Nombre", description="Nombre completo del pasajero")
+    Sex: Literal["male", "female"] = Field(..., title="Sexo", description="Sexo: 'male' o 'female'")
+    Age: float = Field(..., title="Edad", description="Edad del pasajero en años")
+    SibSp: int = Field(..., title="Hermanos/Pareja a bordo", description="Número de hermanos/esposas a bordo")
+    Parch: int = Field(..., title="Padres/Hijos a bordo", description="Número de padres/hijos a bordo")
+    Ticket: str = Field(..., title="Boleto", description="Número o código del boleto (puede incluir letras y espacios ej. 'A/5 21171', 'PC 17599', '113803', '373450', '330877',..)")
+    Fare: float = Field(..., title="Tarifa", description="Tarifa pagada por el boleto")
+    Cabin: str = Field(..., title="Cabina", description="Cabina asignada (puede ser alfanumérica, ej: 'C85', 'C123', 'G6', 'A6', 'C23',..)")
+    Embarked: str = Field(..., title="Puerto de embarque", description="C = Cherbourg, Q = Queenstown, S = Southampton (ej. 'C', 'Q', 'S')")
 
 class InputData(BaseModel):
     data: PassengerFeatures
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "data": {
                     "PassengerId": 11,
                     "Pclass": 3,
                     "Name": "B",
                     "Sex": "male",
-                    "Age": 4,
+                    "Age": 25,
                     "SibSp": 1,
                     "Parch": 1,
-                    "Ticket": "PP 9549",
-                    "Fare": 16.7,
+                    "Ticket": "A/5 21171",
+                    "Fare": 7.25,
                     "Cabin": "G6",
                     "Embarked": "S"
                 }
             }
         }
 
-@app.on_event("startup")
 def load_models():
     """Carga modelos entrenados"""
     for file in os.listdir(MODELS_DIR):
@@ -77,45 +87,40 @@ def predecir(modelo: ModelosEnum, input_data: InputData):
     if modelo not in loaded_models:
         raise HTTPException(status_code=404, detail=f"Modelo '{modelo}' no encontrado.")
     
-    df = pd.DataFrame([input_data.data])
+    input_dict = input_data.data.dict()
+    df = pd.DataFrame([input_dict])
+    
     model = loaded_models[modelo]
     
-    #validar columnas
     try:
         expected_cols = model.feature_names_in_
-        missing = [col for col in expected_cols if col not in df.columns]
-        if missing:
-            raise HTTPException(status_code=400, detail=f"Faltan columnas requeridas: {missing}")
         df = df[expected_cols]
-    except AttributeError:
-        raise HTTPException(status_code=500, detail="El modelo cargado no contiene metainformación de entrada.")
     
-    start_time = time.time()
-    try:
+        start_time = time.time()
         pred = model.predict(df)
+        end_time = time.time()
+        latency_ms = round((end_time - start_time) * 1000, 2)
+        
+        log = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "modelo": modelo,
+            "input": input_dict,
+            "prediccion": pred.tolist(),
+            "latencia_ms": latency_ms
+        }
+        
+        os.makedirs("logs", exist_ok=True)
+        with open("logs/inferencia.jsonl", "a") as f:
+            f.write(json.dumps(log) + "\n")
+        
+        return {
+            "modelo": modelo,
+            "entrada": input_dict,
+            "prediccion": pred.tolist()
+        }
+        
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error al hacer predicción: {str(e)}")
-    end_time = time.time()
-    latency_ms = round((end_time - start_time) * 1000, 2)
-    
-    #Log de inferencia
-    log = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "modelo": modelo,
-        "input": input_data.data.dict(),
-        "prediccion": pred.tolist(),
-        "latencia_ms": latency_ms
-    }
-    
-    os.makedirs("logs", exist_ok=True)
-    with open("logs/inferencia.jsonl", "a") as f:
-        f.write(json.dumps(log) + "\n")
-    
-    return {
-        "modelo": modelo,
-        "entrada": input_data.data,
-        "prediccion": pred.tolist()
-    }
-    
+        
 if __name__ == "__main__":
     uvicorn.run("serve:app", host="0.0.0.0", port=8000)
