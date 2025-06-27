@@ -48,8 +48,6 @@ services:
     container_name: model-api
     command:  uvicorn serve:app --host 0.0.0.0 --port 8000 --reload
     environment:
-      # FastAPI se conectará al cliente Ray del ray-head.
-      # ray-head es el nombre del servicio en la red Docker.
       RAY_ADDRESS: ray://ray-head:10001
     ports:
       - "8000:8000"
@@ -63,10 +61,7 @@ services:
     container_name: dashboard
     command:  streamlit run dashboard.py --server.address=0.0.0.0 --server.port=8501
     environment:
-      # Streamlit también se conectará al cliente Ray.
       RAY_ADDRESS: ray://ray-head:10001
-      # Streamlit se conectará a tu API de FastAPI.
-      # model-api es el nombre del servicio en la red Docker.
       FASTAPI_URL: http://model-api:8000
       
     ports:
@@ -79,5 +74,5 @@ services:
 
 networks:
   ray-net:
-    driver: bridge # Es el driver de red por defecto en Docker Compose, pero explícito es bueno
+    driver: bridge # Es el driver de red por defecto en Docker Compose
 

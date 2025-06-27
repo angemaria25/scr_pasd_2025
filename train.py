@@ -250,7 +250,7 @@ def safe_train_and_get_pipeline(name, params, X_ref, y_ref, test_size, retries=3
     return name, None, None
 
 def main():
-    # Define el namespace que usarán todos los actores detached
+    # Define el namespace que usarán para todos los actores detached
     RAY_NAMESPACE = "my_ml_models_namespace" 
 
     try:
@@ -298,11 +298,10 @@ def main():
         if pipeline:
             logger.info(f"Entrenamiento de '{name}' completado. Creando ModelServiceActor para '{name}'.")
             try:
-                # Intentar obtener el actor en el namespace específico.
-                # Si existe, lo usamos. Si no, lo creamos.
+                # Intenta obtener el actor en el namespace específico, si existe, se usa, si no, se crea.
                 model_actor_handle = ray.get_actor(name, namespace=RAY_NAMESPACE)
                 logger.info(f"ModelServiceActor '{name}' ya existe en el namespace '{RAY_NAMESPACE}'. Saltando recreación.")
-                # Si el actor ya existe y quieres actualizarlo, aquí llamarías a un método de actualización:
+                # Si el actor ya existe y se quiere actualizar llamar a un método de actualización:
                 # ray.get(model_actor_handle.update_pipeline_and_metadata.remote(pipeline, metadata))
             except ValueError: # Actor no encontrado en este namespace, crearlo
                 model_actor_handle = ModelServiceActor.options(

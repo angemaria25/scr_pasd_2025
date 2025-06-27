@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException
 import ray
-from pydantic import BaseModel
-import pandas as pd
+from pydantic import BaseModel, Field
 from typing import Dict, List, Any
 import os
 from datetime import datetime
@@ -19,9 +18,22 @@ RAY_NAMESPACE = "my_ml_models_namespace"
 # Definición de los nombres de los modelos a encontrar
 EXPECTED_MODEL_NAMES = ["LogisticRegression", "RandomForestClassifier", "SVC"]
 
-# Modelo Pydantic para validar entrada
 class PredictionRequest(BaseModel):
-    features: Dict[str, Any]
+    features: Dict[str, Any] = Field(
+        example={
+            "Pclass": 3,
+            "Sex": "female",
+            "Age": 20,
+            "SibSp": 1,
+            "Parch": 0,
+            "Fare": 7.50,
+            "Embarked": "S"
+        },
+        description="Diccionario de características de entrada para la predicción. "
+                    "Las claves son los nombres de las características y los valores son sus datos. "
+                    "Asegúrate de que estas características coincidan con las usadas durante el entrenamiento del modelo."
+    )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -42,7 +54,7 @@ async def lifespan(app: FastAPI):
             
             for attempt in range(max_retries):
                 try:
-                    # Intentar obtener el actor en el namespace específico
+                    # Obtener el actor en el namespace específico
                     model_actor_handle = ray.get_actor(model_name, namespace=RAY_NAMESPACE)
                     app.state.models[model_name] = model_actor_handle
                     logger.info(f"Actor '{model_name}' obtenido exitosamente en el intento {attempt + 1} del namespace '{RAY_NAMESPACE}'")
@@ -75,7 +87,9 @@ async def lifespan(app: FastAPI):
         logger.error(f"Error desconectando Ray: {str(e)}")
     
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan,
+                title="API de Predicción de Modelos",
+                description="Esta API permite realizar predicciones utilizando modelos de Machine Learning desplegados como actores en un clúster de Ray. Proporciona endpoints para listar modelos disponibles, realizar predicciones y verificar el estado de salud.")
     
 @app.get("/models")
 async def list_models():
@@ -103,12 +117,20 @@ async def predict(model_name: str, request: PredictionRequest):
             )
         
         model_actor_handle = app.state.models[model_name]
+        
+        start_time = time.perf_counter() 
+        
+        # Llama al método predict del actor de Ray de forma remota y espera el resultado.
         prediction_result = ray.get(model_actor_handle.predict.remote(request.features))
+        
+        end_time = time.perf_counter() 
+        latency_ms = (end_time - start_time) * 1000 # Latencia en milisegundos
         
         result = {
             "model": model_name,
             "prediction": prediction_result["prediction"],
-            "input_features": request.features
+            "input_features": request.features,
+            "latency_ms": latency_ms 
         }
         
         if prediction_result["probabilities"] is not None:
@@ -125,7 +147,7 @@ async def predict(model_name: str, request: PredictionRequest):
 
 @app.get("/health")
 async def health_check():
-    """Endpoint de salud"""
+    """Endpoint para verificar el estado de salud de la API.  Indica si la API está funcionando y cuántos modelos están cargados"""
     try:
         model_count = len(app.state.models) if hasattr(app.state, 'models') else 0
         return {
@@ -163,6 +185,3 @@ async def get_all_models_metadata():
         except Exception as e:
             all_metadata[model_name] = {"error": f"No se pudo obtener metadatos: {str(e)}"}
     return all_metadata
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
