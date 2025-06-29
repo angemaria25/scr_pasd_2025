@@ -5,6 +5,7 @@ services:
     command: bash -c "
       ray start --head --port=6379 --dashboard-host=0.0.0.0  --dashboard-port=8265 &&
       echo 'Nodo HEAD en marcha y escuchando en puertos 6379 y 8265' &&
+      python train.py &&
       tail -f /dev/null"
     ports:
       - "6379:6379"   
@@ -55,22 +56,31 @@ services:
       - ray-head
     networks:
       - ray-net
+    shm_size: 1gb # Importante, ya que pondrá DataFrames en el almacén de objetos
+    healthcheck: # Añade esto
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s # Da tiempo para que FastAPI inicie
+
     
   dashboard:
     build: .
     container_name: dashboard
     command:  streamlit run dashboard.py --server.address=0.0.0.0 --server.port=8501
     environment:
-      RAY_ADDRESS: ray://ray-head:10001
       FASTAPI_URL: http://model-api:8000
-      
     ports:
       - "8501:8501"
     depends_on:
-      - ray-head
-      - model-api
+      ray-head:
+        condition: service_started # Todavía depende de ray-head para que Ray esté corriendo
+      model-api: # Añade esta dependencia con condición de salud
+        condition: service_healthy
     networks:
       - ray-net
+    shm_size: 1gb
 
 networks:
   ray-net:
