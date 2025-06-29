@@ -168,6 +168,8 @@ class ModelTrainer:
         X = ray.get(X_ref) # Obtener DataFrame directamente del almacén de objetos
         y = ray.get(y_ref) # Obtener Serie directamente del almacén de objetos
 
+        logger.info(f"ModelTrainer ({self.model_name}): X después de ray.get: {type(X)}, y después de ray.get: {type(y)}")
+        
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         logger.info(f"Entrenamiento ({self.model_name}): Datos divididos para entrenamiento/prueba. Train: {X_train.shape}, Test: {X_test.shape}")
 
@@ -181,19 +183,37 @@ class ModelTrainer:
         #Evaluación
         preds = pipeline.predict(X_test)
 
+        # Manejo mejorado del ROC AUC
+        roc_auc = None
         try:
-            probas = pipeline.predict_proba(X_test)[:, 1]
-            roc_auc = roc_auc_score(y_test, probas)
-        except AttributeError:
-            probas = None
+            if hasattr(pipeline, 'predict_proba'):
+                probas = pipeline.predict_proba(X_test)
+                # Verificar si es un problema binario o multiclase
+                if probas.shape[1] == 2:  # Problema binario
+                    roc_auc = roc_auc_score(y_test, probas[:, 1])
+                else:  # Problema multiclase
+                    roc_auc = roc_auc_score(y_test, probas, multi_class='ovr')
+        except (AttributeError, ValueError) as e:
+            logger.warning(f"Evaluación ({self.model_name}): No se pudo calcular ROC AUC: {str(e)}")
             roc_auc = None
-            logger.warning(f"Evaluación ({self.model_name}): Modelo no soporta predict_proba.")
+
+        # Calcular métricas con manejo de casos multiclase
+        try:
+            # Para problemas multiclase, usar 'weighted' average
+            precision = precision_score(y_test, preds, average='weighted', zero_division=0)
+            recall = recall_score(y_test, preds, average='weighted', zero_division=0)
+            f1 = f1_score(y_test, preds, average='weighted', zero_division=0)
+        except Exception as e:
+            logger.warning(f"Evaluación ({self.model_name}): Error al calcular métricas, usando cálculo básico: {str(e)}")
+            precision = precision_score(y_test, preds, zero_division=0)
+            recall = recall_score(y_test, preds, zero_division=0)
+            f1 = f1_score(y_test, preds, zero_division=0)
 
         metrics = {
             "accuracy": accuracy_score(y_test, preds),
-            "precision": precision_score(y_test, preds, zero_division=0),
-            "recall": recall_score(y_test, preds, zero_division=0),
-            "f1_score": f1_score(y_test, preds, zero_division=0),
+            "precision": precision,
+            "recall": recall,
+            "f1_score": f1,
             "roc_auc": roc_auc,
             "confusion_matrix": confusion_matrix(y_test, preds).tolist()
         }
@@ -215,6 +235,9 @@ def safe_train_and_get_pipeline(name, params, X_ref, y_ref, test_size, retries=3
     con reintentos en caso de fallo del actor.
     Devuelve el pipeline entrenado y sus metadatos.
     """
+    
+    logger.info(f"safe_train_and_get_pipeline ({name}): Recibiendo X_ref de tipo: {type(X_ref)}, y_ref de tipo: {type(y_ref)}")
+
     for attempt in range(retries):
         try:
             trainer = ModelTrainer.remote(name, params)
@@ -229,6 +252,44 @@ def safe_train_and_get_pipeline(name, params, X_ref, y_ref, test_size, retries=3
 
     logger.error(f"Fallo Total ({name}): El modelo '{name}' falló después de {retries} intentos y no pudo ser entrenado.")
     return name, None, None
+
+@ray.remote
+def process_training_results(futures: List[ray.ObjectRef]):
+    """
+    Procesa los resultados de los entrenamientos y registra los actores de modelos.
+    Esta función remota correrá en segundo plano.
+    """
+    trained_models_info = []
+    # Obtener los resultados de todos los futures
+    results = ray.get(futures)
+    
+    for name, pipeline, metadata in results:
+        if pipeline:
+            logger.info(f"Entrenamiento de '{name}' completado. Creando/Actualizando ModelServiceActor para '{name}'.")
+            try:
+                model_actor_handle = ray.get_actor(name, namespace=RAY_NAMESPACE)
+                ray.get(model_actor_handle.update_pipeline_and_metadata.remote(pipeline, metadata))
+                logger.info(f"ModelServiceActor '{name}' actualizado en el namespace '{RAY_NAMESPACE}'.")
+            except ValueError: # Actor no encontrado en este namespace, crearlo
+                model_actor_handle = ModelServiceActor.options(
+                    name=name,
+                    lifetime="detached",
+                    max_restarts=-1,
+                    namespace=RAY_NAMESPACE
+                ).remote(name, pipeline, metadata)
+                logger.info(f"ModelServiceActor '{name}' creado y nombrado en el namespace '{RAY_NAMESPACE}'. Handle: {model_actor_handle}")
+                ray.get(model_actor_handle.get_model_name.remote()) # Forzar una llamada remota para asegurar que el actor está completamente inicializado
+
+            trained_models_info.append({"name": name, "metadata": metadata})
+        else:
+            logger.error(f"Fallo al entrenar el modelo '{name}'. No se creará/actualizará ModelServiceActor.")
+
+    logger.info("\n--- Resumen Final de Modelos Entrenados y Actores Creados ---")
+    for info in trained_models_info:
+        logger.info(f"Resumen: Modelo '{info['name']}' entrenado y su ModelServiceActor creado/actualizado. Accuracy: {info['metadata']['metrics']['accuracy']:.4f}")
+
+    # Ya no hay que eliminar archivos temporales
+    return {"status": "completed", "message": "Todos los entrenamientos finalizados.", "trained_models": trained_models_info}
 
 @ray.remote(max_restarts=-1, max_task_retries=-1)
 class TrainingOrchestrator:
@@ -255,17 +316,26 @@ class TrainingOrchestrator:
         try:
             # Obtener el DataFrame del almacén de objetos
             data_df = ray.get(data_ref)
+            
+            logger.info(f"TrainingOrchestrator ({task_id}): Tipo de data_df después de ray.get: {type(data_df)}")
+            logger.info(f"TrainingOrchestrator ({task_id}): Shape de data_df: {data_df.shape}")
+            logger.info(f"TrainingOrchestrator ({task_id}): Columnas de data_df: {data_df.columns.tolist()}")
 
             if target_column not in data_df.columns:
                 raise ValueError(f"El dataset debe contener la columna objetivo '{target_column}'. Columnas disponibles: {data_df.columns.tolist()}")
 
             X = data_df.drop(target_column, axis=1)
             y = data_df[target_column]
+            
+            logger.info(f"TrainingOrchestrator ({task_id}): X shape: {X.shape}, y shape: {y.shape}")
+            logger.info(f"TrainingOrchestrator ({task_id}): y unique values: {y.unique()}")
 
             # Poner X y y de nuevo en el almacén de objetos para pasar ObjectRefs a los trainers
             X_ref = ray.put(X)
             y_ref = ray.put(y)
             test_size = 0.2 # Esto podría ser configurable si se desea
+            
+            logger.info(f"TrainingOrchestrator ({task_id}): X_ref tipo: {type(X_ref)}, y_ref tipo: {type(y_ref)}")
 
         except Exception as e:
             logger.error(f"TrainingOrchestrator ({task_id}): Error al procesar los datos de ObjectRef: {e}")
@@ -280,7 +350,8 @@ class TrainingOrchestrator:
             future = safe_train_and_get_pipeline.remote(name, params, X_ref, y_ref, test_size)
             futures.append(future)
 
-        processing_future = ray.remote(self._process_training_results).remote(futures)
+        # Usar una función remota separada en lugar de un método de instancia
+        processing_future = process_training_results.remote(futures)
         self.training_tasks[task_id] = {
             "status": "in_progress",
             "message": "Entrenamiento de modelos iniciado en segundo plano.",
@@ -292,40 +363,6 @@ class TrainingOrchestrator:
 
         return {"task_id": task_id, "status": "initiated", "message": "Entrenamiento de modelos iniciado."}
 
-    async def _process_training_results(self, futures: List[ray.ObjectRef]):
-        """
-        Procesa los resultados de los entrenamientos y registra los actores de modelos.
-        Esta es una tarea asíncrona que correrá en segundo plano.
-        """
-        trained_models_info = []
-        for name, pipeline, metadata in ray.get(futures):
-            if pipeline:
-                logger.info(f"Entrenamiento de '{name}' completado. Creando/Actualizando ModelServiceActor para '{name}'.")
-                try:
-                    model_actor_handle = ray.get_actor(name, namespace=RAY_NAMESPACE)
-                    ray.get(model_actor_handle.update_pipeline_and_metadata.remote(pipeline, metadata))
-                    logger.info(f"ModelServiceActor '{name}' actualizado en el namespace '{RAY_NAMESPACE}'.")
-                except ValueError: # Actor no encontrado en este namespace, crearlo
-                    model_actor_handle = ModelServiceActor.options(
-                        name=name,
-                        lifetime="detached",
-                        max_restarts=-1,
-                        namespace=RAY_NAMESPACE
-                    ).remote(name, pipeline, metadata)
-                    logger.info(f"ModelServiceActor '{name}' creado y nombrado en el namespace '{RAY_NAMESPACE}'. Handle: {model_actor_handle}")
-                    ray.get(model_actor_handle.get_model_name.remote()) # Forzar una llamada remota para asegurar que el actor está completamente inicializado
-
-                trained_models_info.append({"name": name, "metadata": metadata})
-            else:
-                logger.error(f"Fallo al entrenar el modelo '{name}'. No se creará/actualizará ModelServiceActor.")
-
-        logger.info("\n--- Resumen Final de Modelos Entrenados y Actores Creados ---")
-        for info in trained_models_info:
-            logger.info(f"Resumen: Modelo '{info['name']}' entrenado y su ModelServiceActor creado/actualizado. Accuracy: {info['metadata']['metrics']['accuracy']:.4f}")
-
-        # Ya no hay que eliminar archivos temporales
-        return {"status": "completed", "message": "Todos los entrenamientos finalizados.", "trained_models": trained_models_info}
-
     def get_training_status(self, task_id: str):
         """Devuelve el estado de una tarea de entrenamiento específica."""
         task_info = self.training_tasks.get(task_id)
@@ -333,7 +370,9 @@ class TrainingOrchestrator:
             return {"status": "not_found", "message": f"Tarea de entrenamiento con ID '{task_id}' no encontrada."}
 
         if task_info["status"] == "in_progress":
-            if task_info["future"].is_finished():
+            # Usar ray.wait para verificar si el future está listo
+            ready, _ = ray.wait([task_info["future"]], timeout=0)
+            if ready:
                 try:
                     result = ray.get(task_info["future"])
                     task_info["status"] = "completed"

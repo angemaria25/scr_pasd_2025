@@ -179,6 +179,15 @@ async def predict(model_name: str, request: PredictionRequest):
         logger.error(f"Error en predicción para modelo {model_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
+
+# En serve.py, añade esto en algún lugar, por ejemplo, antes de @app.get("/health")
+@app.get("/healthz")
+async def healthz_check():
+    """Basic health check for Docker Compose."""
+    return {"status": "ok"}
+
+
+
 @app.get("/health")
 async def health_check():
     """Endpoint para verificar el estado de salud de la API."""
