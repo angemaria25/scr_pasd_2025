@@ -1,36 +1,199 @@
-### **Proyecto Plataforma de Aprendizaje Supervisado Distribuido**  
+# Sistema de ML con Ray, FastAPI y Streamlit
 
-#### **Descripción:**  
-El proyecto consiste en desarrollar una plataforma capaz de entrenar y desplegar modelos de **aprendizaje supervisado** de manera distribuida, utilizando **Ray**, **Docker** y **Scikit-Learn**. La plataforma debe procesar conjuntos de datos etiquetados, entrenar múltiples modelos en paralelo y ponerlos en producción mediante una API funcional. El sistema debe reflejar los conceptos de computación distribuida aprendidos en el curso, garantizando escalabilidad, tolerancia a fallos y eficiencia.  
+Este proyecto implementa una plataforma completa de Machine Learning usando Ray para computación distribuida, FastAPI como backend y Streamlit como frontend.
 
-#### **Fases del Proyecto**  
+## 🏗️ Arquitectura
 
-1. **Entrenamiento Distribuido**  
-   - Implementar un sistema que permita el entrenamiento simultáneo de múltiples modelos de *machine learning* sobre un mismo dataset.  
-   - Soporte para cargar y procesar datos en un entorno distribuido.  
+- **Ray Head**: Nodo principal del clúster Ray
+- **Ray Workers**: Nodos trabajadores para procesamiento distribuido
+- **FastAPI**: API backend para manejar entrenamientos y predicciones
+- **Streamlit**: Dashboard frontend para interacción con el usuario
 
-2. **Despliegue de Modelos (Serving)**  
-   - Desarrollo de una **API** REST o programática para interactuar con los modelos entrenados.
-   - Integración con contenedores Docker para garantizar portabilidad y reproducibilidad con autodescubrimiento.  
+## 🚀 Inicio Rápido
 
-3. **Monitoreo y Visualización**  
-   - Generación de gráficas que muestren:  
-     - Métricas de rendimiento durante el entrenamiento (ej: precisión, pérdida).  
-     - Estadísticas de inferencia en producción (ej: latencia, uso de recursos).  
+### Opción 1: Script Automático (Recomendado)
+```bash
+chmod +x start_system.sh
+./start_system.sh
+```
 
-#### **Criterios de Evaluación**  
-- ✅ Diseño de un **sistema distribuido** que cumpla con las funcionalidades básicas y opcionales.  
-- ✅ Implementación de **tolerancia a fallos** (ej: replicación de nodos, *autodescubrimiento*).  
-- ✅ Capacidad de entrenar **múltiples datasets secuencialmente** en una misma ejecución.  
-- ✅ Uso eficiente de **Ray** para gestión de tareas y recursos.  
+### Opción 2: Manual
+```bash
+# Construir y iniciar todos los servicios
+docker-compose up --build
 
-#### **Funcionalidades Adicionales**  
-1. Entrenamiento y *serving* de **varios datasets simultáneamente**.  
-2. **Estadísticas avanzadas**: Comparativa de modelos, análisis de tendencias, etc.  
-3. Eliminación del **punto único de fallo** en el líder del clúster.  
-4. **Interfaz gráfica** (GUI) para gestión y visualización del sistema.  
-5. **Seguridad**: Encriptación de comunicaciones y autenticación de nodos.  
+# O iniciar en segundo plano
+docker-compose up -d --build
+```
 
----
+## 🔍 Verificación del Sistema
 
-- **Entrega**: 22 Junio 11:59:59 pm
+### Verificar estado de los servicios
+```bash
+docker-compose ps
+```
+
+### Diagnóstico de Ray
+```bash
+docker-compose exec model-api python debug_ray.py
+```
+
+### Ver logs de un servicio específico
+```bash
+docker-compose logs -f [service_name]
+# Ejemplos:
+docker-compose logs -f ray-head
+docker-compose logs -f model-api
+docker-compose logs -f dashboard
+```
+
+## 🌐 Acceso a los Servicios
+
+- **Streamlit Dashboard**: http://localhost:8501
+- **FastAPI API**: http://localhost:8000
+- **FastAPI Docs**: http://localhost:8000/docs
+- **Ray Dashboard**: http://localhost:8265
+
+## 📊 Uso del Sistema
+
+### 1. Subir Dataset
+- Ve al dashboard de Streamlit (http://localhost:8501)
+- Sube un archivo CSV o JSON
+- Selecciona la columna objetivo
+- Elige los modelos a entrenar
+
+### 2. Entrenar Modelos
+- Haz clic en "Iniciar Entrenamiento"
+- El sistema procesará los datos usando Ray
+- Podrás ver el progreso en tiempo real
+
+### 3. Realizar Predicciones
+- Una vez entrenados los modelos, aparecerán en la sección de predicción
+- Introduce las características en formato JSON
+- Obtén predicciones instantáneas
+
+## 🛠️ Solución de Problemas
+
+### Error: "Can't run an actor the server doesn't have a handle for"
+
+Este error indica problemas de conectividad con Ray. Soluciones:
+
+1. **Verificar que Ray esté funcionando**:
+   ```bash
+   docker-compose exec model-api python debug_ray.py
+   ```
+
+2. **Reiniciar el sistema**:
+   ```bash
+   docker-compose down
+   docker-compose up --build
+   ```
+
+3. **Verificar logs del ray-head**:
+   ```bash
+   docker-compose logs ray-head
+   ```
+
+### Error de conexión en Streamlit
+
+1. **Verificar que FastAPI esté funcionando**:
+   ```bash
+   curl http://localhost:8000/health
+   ```
+
+2. **Verificar logs de model-api**:
+   ```bash
+   docker-compose logs model-api
+   ```
+
+### Modelos no aparecen después del entrenamiento
+
+1. **Verificar que el entrenamiento se completó**:
+   ```bash
+   docker-compose logs ray-head
+   ```
+
+2. **Ejecutar diagnóstico**:
+   ```bash
+   docker-compose exec model-api python debug_ray.py
+   ```
+
+3. **Recargar la página de Streamlit**
+
+## 🔧 Configuración
+
+### Variables de Entorno
+
+- `RAY_NAMESPACE`: Namespace de Ray (default: "my_ml_models_namespace")
+- `FASTAPI_URL`: URL de FastAPI para Streamlit (default: "http://model-api:8000")
+
+### Modelos Soportados
+
+- LogisticRegression
+- RandomForestClassifier
+- SVC (Support Vector Classifier)
+
+## 📁 Estructura del Proyecto
+
+```
+.
+├── docker-compose.yml      # Configuración de servicios
+├── Dockerfile             # Imagen Docker
+├── requirements.txt       # Dependencias Python
+├── train.py              # Script de entrenamiento con Ray
+├── serve.py              # API FastAPI
+├── dashboard.py          # Dashboard Streamlit
+├── debug_ray.py          # Script de diagnóstico
+├── start_system.sh       # Script de inicio automático
+└── README.md            # Este archivo
+```
+
+## 🐛 Debug y Desarrollo
+
+### Ejecutar un servicio individualmente
+```bash
+# Solo Ray head
+docker-compose up ray-head
+
+# Solo FastAPI
+docker-compose up model-api
+
+# Solo Streamlit
+docker-compose up dashboard
+```
+
+### Acceder a un contenedor
+```bash
+docker-compose exec model-api bash
+docker-compose exec ray-head bash
+```
+
+### Ver todos los logs
+```bash
+docker-compose logs -f
+```
+
+## 🔄 Actualización
+
+Para actualizar el sistema después de cambios en el código:
+
+```bash
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+## 📝 Notas Importantes
+
+1. **Memoria**: El sistema requiere al menos 4GB de RAM disponible
+2. **Puertos**: Asegúrate de que los puertos 6379, 8000, 8265, 8501, 10001 estén disponibles
+3. **Datos**: Los datasets se procesan en memoria, considera el tamaño de tus datos
+4. **Persistencia**: Los modelos entrenados se mantienen mientras el clúster Ray esté activo
+
+## 🆘 Soporte
+
+Si encuentras problemas:
+
+1. Ejecuta el diagnóstico: `docker-compose exec model-api python debug_ray.py`
+2. Revisa los logs: `docker-compose logs -f`
+3. Reinicia el sistema: `docker-compose down && docker-compose up --build`

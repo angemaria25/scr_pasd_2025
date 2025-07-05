@@ -1,88 +1,95 @@
 services:
   ray-head:
-    build: .
+    build: . 
     container_name: ray-head
-    command: bash -c "
-      ray start --head --port=6379 --dashboard-host=0.0.0.0  --dashboard-port=8265 &&
-      echo 'Nodo HEAD en marcha y escuchando en puertos 6379 y 8265' &&
-      python train.py &&
-      tail -f /dev/null"
     ports:
-      - "6379:6379"   
-      - "8265:8265"  
-      - "10001:10001" 
-    networks:
-      - ray-net
-    shm_size: 1gb
-    cpus: 2
-    
-  ray-worker-1:
-    build: .
-    container_name: ray-worker-1
-    command: bash -c "
-      ray start --address=ray-head:6379 &&
-      echo 'Worker 1 conectado al HEAD' &&
-      tail -f /dev/null"
-    depends_on:
-      - ray-head
-    networks:
-      - ray-net
-    shm_size: 1gb
-    cpus: 1
-
-  ray-worker-2:
-    build: .
-    container_name: ray-worker-2
-    command:  bash -c "
-      ray start --address=ray-head:6379 &&
-      echo 'Worker 2 conectado al HEAD' &&
-      tail -f /dev/null"
-    depends_on:
-      - ray-head
-    networks:
-      - ray-net
-    shm_size: 1gb
-    cpus: 1
-
-  model-api:
-    build: .
-    container_name: model-api
-    command:  uvicorn serve:app --host 0.0.0.0 --port 8000 --reload
+      - "8000:8000"  # FastAPI backend
+      - "8501:8501"  # Streamlit frontend
+      - "8265:8265"  # Ray dashboard
+      - "6379:6379"  # Ray head port
     environment:
-      RAY_ADDRESS: ray://ray-head:10001
-    ports:
-      - "8000:8000"
+      - RAY_DISABLE_IMPORT_WARNING=1
+      - STREAMLIT_SERVER_PORT=8501
+    # Fix shared memory issue for Ray
+    shm_size: '2gb'
+    # Limit container RAM to 3GB
+    mem_limit: 3g
+  
+    command: >
+      sh -c "
+        echo 'Starting Ray head node...' &&
+        ray start --head --port=6379 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265 --object-store-memory=500000000 --num-cpus=2 --memory=2000000000 &&
+        echo 'Ray head started, waiting for full initialization...' &&
+        sleep 15 &&
+        echo 'Starting FastAPI and Streamlit...' &&
+        uvicorn main:app --host 0.0.0.0 --port 8000 --reload &
+        streamlit run interface.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true
+      "
+    networks:
+      - ray-net
+
+  ray-worker1:
+    build: .
+    container_name: ray-worker1
     depends_on:
       - ray-head
-    networks:
-      - ray-net
-    shm_size: 1gb # Importante, ya que pondrá DataFrames en el almacén de objetos
-    healthcheck: # Añade esto
-      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 10s # Da tiempo para que FastAPI inicie
-
-    
-  dashboard:
-    build: .
-    container_name: dashboard
-    command:  streamlit run dashboard.py --server.address=0.0.0.0 --server.port=8501
     environment:
-      FASTAPI_URL: http://model-api:8000
-    ports:
-      - "8501:8501"
-    depends_on:
-      ray-head:
-        condition: service_started # Todavía depende de ray-head para que Ray esté corriendo
-      model-api: # Añade esta dependencia con condición de salud
-        condition: service_healthy
+      - RAY_DISABLE_IMPORT_WARNING=1
+    # Fix shared memory issue for Ray
+    shm_size: '2gb'
+    # Limit container RAM to 2GB
+    mem_limit: 2g
+    command: >
+      sh -c "
+        echo 'Waiting for Ray head to be ready...' &&
+        sleep 20 &&
+        for i in {1..30}; do
+          if ray status --address=ray-head:6379 >/dev/null 2>&1; then
+            echo 'Ray head is ready, starting worker...'
+            break
+          else
+            echo 'Ray head not ready yet, waiting...' 
+            sleep 5
+          fi
+        done &&
+        ray start --address=ray-head:6379 --object-store-memory=500000000 --memory=1500000000 &&
+        echo 'Ray worker started successfully' &&
+        tail -f /dev/null
+      "
     networks:
       - ray-net
-    shm_size: 1gb
 
+  ray-worker2:
+    build: .
+    container_name: ray-worker2
+    depends_on:
+      - ray-head
+    environment:
+      - RAY_DISABLE_IMPORT_WARNING=1
+    # Fix shared memory issue for Ray
+    shm_size: '2gb'
+    # Limit container RAM to 2GB
+    mem_limit: 2g
+    command: >
+      sh -c "
+        echo 'Waiting for Ray head to be ready...' &&
+        sleep 20 &&
+        for i in {1..30}; do
+          if ray status --address=ray-head:6379 >/dev/null 2>&1; then
+            echo 'Ray head is ready, starting worker...'
+            break
+          else
+            echo 'Ray head not ready yet, waiting...' 
+            sleep 5
+          fi
+        done &&
+        ray start --address=ray-head:6379 --object-store-memory=500000000 --memory=1500000000 &&
+        echo 'Ray worker started successfully' &&
+        tail -f /dev/null
+      "
+    networks:
+      - ray-net
+    
 networks:
   ray-net:
-    driver: bridge # Es el driver de red por defecto en Docker Compose
-
+    driver: bridge
