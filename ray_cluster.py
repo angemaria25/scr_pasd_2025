@@ -38,8 +38,8 @@ def initialize_ray(address=None, local_mode=False):
             logger.info("Initializing Ray in local mode")
             ray.init(runtime_env=runtime_env, namespace=namespace)
         else:
-            logger.info("Auto-discovering Ray cluster")
-            ray.init(address="auto", runtime_env=runtime_env, namespace=namespace)
+            logger.info("Auto-discovering Ray Cluster (Docker)")
+            ray.init(address="ray-head:6379", runtime_env=runtime_env, namespace=namespace)
                 
         logger.info(f"Ray initialized with resources: {ray.cluster_resources()}")
         return True

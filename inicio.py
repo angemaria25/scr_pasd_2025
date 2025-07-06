@@ -36,12 +36,12 @@ def get_model_names():
 def create_global_app():
     """Create the global app instance for uvicorn"""
     if not ray.is_initialized():
-        try:
-            initialize_ray(address=None, local_mode=False)
+        success = initialize_ray(address="ray-head:6379", local_mode=False)
+        if success:
             logger.info("Ray initialized for API serving")
-        except Exception as e:
-            logger.warning(f"Could not initialize Ray: {e}. Starting with empty model list.")
-    
+        else:
+            logger.warning("Ray could not be initialized. Starting without actors.")
+        
     model_names = get_model_names()
     app, predictor = create_app(model_names)
     return app
@@ -53,14 +53,8 @@ def main():
     """Main execution function for standalone serving"""
     logger.info("Starting API server in standalone mode")
     
-    if not ray.is_initialized():
-        initialize_ray(address=None, local_mode=False)
-    
     model_names = get_model_names()
     app, predictor = create_app(model_names)
     
     logger.info(f"Starting API server with {len(model_names)} models")
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-if __name__ == "__main__":
-    main()

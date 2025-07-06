@@ -20,9 +20,9 @@ services:
     command: >
       sh -c "
         echo 'Starting Ray head node...' &&
-        ray start --head --port=6379 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265 --object-store-memory=500000000 --num-cpus=2 --memory=2000000000  --block &&
+        ray start --head --port=6379 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265 --object-store-memory=500000000 --num-cpus=2 --memory=2000000000 &&
         echo 'Ray head started, waiting for full initialization...' &&
-        sleep 90 &&
+        sleep 120 &&
         echo 'Starting FastAPI and Streamlit...' &&
         uvicorn inicio:app --host 0.0.0.0 --port 8000 --reload &
         streamlit run streamlit_fronted.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true
@@ -45,7 +45,7 @@ services:
     command: >
       sh -c "
         echo 'Waiting for Ray head to be ready...' &&
-        sleep 20 &&
+        sleep 200 &&
         for i in {1..30}; do
           if ray status --address=ray-head:6379 >/dev/null 2>&1; then
             echo 'Ray head is ready, starting worker...'
