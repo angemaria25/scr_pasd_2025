@@ -18,6 +18,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sklearn.model_selection import train_test_split
 
+from load_data import get_data_manager, load_dataset
+import os
+
 logger = logging.getLogger(__name__)
 
 # Pydantic models for request validation
@@ -50,8 +53,8 @@ def create_app(model_names):
     @app.get("/dataset_preview")
     async def dataset_preview(dataset: str, n: int = 5):
         """Return a preview/sample of the dataset by name, loading from persistent storage if needed."""
-        from src.data.data_loader import get_data_manager, load_dataset
-        import os
+        #from load_data import get_data_manager, load_dataset
+        #import os
         data_manager = get_data_manager()
         preview = data_manager.get_file_sample(dataset, n=n)
         if preview is not None:
@@ -111,7 +114,7 @@ def create_app(model_names):
                     logger.warning(f"Could not clear actor {actor_name}: {e}")
             
             # Clear object store data
-            from src.data.data_loader import get_data_manager
+            #from src.data.data_loader import get_data_manager
             data_manager = get_data_manager()
             
             try:
@@ -305,7 +308,7 @@ def create_app(model_names):
                     raise HTTPException(status_code=400, detail=f"Unsupported file type: {request.filename}. Only CSV and JSON files are supported.")
                 
                 # Store data using object store
-                from src.data.data_loader import get_data_manager
+                #from load_data import get_data_manager
                 data_manager = get_data_manager()
                 
                 try:
@@ -341,7 +344,7 @@ def create_app(model_names):
     async def list_uploaded_files():
         """List all uploaded files stored in Ray object store"""
         try:
-            from src.data.data_loader import get_data_manager
+            from load_data import get_data_manager
             data_manager = get_data_manager()
             
             uploaded_files_list = data_manager.list_files()
@@ -487,8 +490,10 @@ def create_app(model_names):
                 raise HTTPException(status_code=400, detail="No datasets configuration provided")
             
             # Import training function
-            from src.models.model_trainer import train_multiple_models, ModelActor
-            from src.data.data_loader import get_data_manager
+            #from src.models.model_trainer import train_multiple_models, ModelActor
+            #from src.data.data_loader import get_data_manager
+            
+            from model_trainer import train_multiple_models, ModelActor
             
             batch_results = {}
             total_models_trained = 0

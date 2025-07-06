@@ -1,40 +1,47 @@
 services:
   ray-head:
-    build: . 
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: ray-head
     ports:
-      - "8000:8000"  #backend
-      - "8501:8501"  #frontend
-      - "8265:8265"  #ray dashboard
-      - "6379:6379"  #ray-head port
+      - "8000:8000"  # FastAPI backend
+      - "8501:8501"  # Streamlit frontend
+      - "8265:8265"  # Ray dashboard
+      - "6379:6379"  # Ray head port
     environment:
       - RAY_DISABLE_IMPORT_WARNING=1
       - STREAMLIT_SERVER_PORT=8501
+    # Fix shared memory issue for Ray
     shm_size: '2gb'
-    mem_limit: 3g
+    # Limit container RAM to 3GB
+    mem_limit: 2.5g
   
     command: >
       sh -c "
         echo 'Starting Ray head node...' &&
-        ray start --head --port=6379 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265 --object-store-memory=500000000 --num-cpus=2 --memory=2000000000 &&
+        ray start --head --port=6379 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265 --object-store-memory=500000000 --num-cpus=2 --memory=2000000000  --block &&
         echo 'Ray head started, waiting for full initialization...' &&
-        sleep 15 &&
+        sleep 90 &&
         echo 'Starting FastAPI and Streamlit...' &&
         uvicorn inicio:app --host 0.0.0.0 --port 8000 --reload &
         streamlit run streamlit_fronted.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true
       "
     networks:
-      - ray-net
+      - ml-net
 
-  ray-worker1:
-    build: .
-    container_name: ray-worker1
+  ray_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
     depends_on:
       - ray-head
     environment:
       - RAY_DISABLE_IMPORT_WARNING=1
-    shm_size: '2gb'
-    mem_limit: 2g
+    # Fix shared memory issue for Ray
+    shm_size: '1.5gb'
+    # Limit container RAM to 2GB
+    mem_limit: 1.5g
     command: >
       sh -c "
         echo 'Waiting for Ray head to be ready...' &&
@@ -48,42 +55,14 @@ services:
             sleep 5
           fi
         done &&
-        ray start --address=ray-head:6379 --object-store-memory=500000000 --memory=1500000000 &&
+        ray start --address=ray-head:6379 --object-store-memory=400000000 --memory=1000000000 &&
         echo 'Ray worker started successfully' &&
         tail -f /dev/null
       "
     networks:
-      - ray-net
+      - ml-net
+    scale: 2  # Start with 2 workers by default
 
-  ray-worker2:
-    build: .
-    container_name: ray-worker2
-    depends_on:
-      - ray-head
-    environment:
-      - RAY_DISABLE_IMPORT_WARNING=1
-    shm_size: '2gb'
-    mem_limit: 2g
-    command: >
-      sh -c "
-        echo 'Waiting for Ray head to be ready...' &&
-        sleep 20 &&
-        for i in {1..30}; do
-          if ray status --address=ray-head:6379 >/dev/null 2>&1; then
-            echo 'Ray head is ready, starting worker...'
-            break
-          else
-            echo 'Ray head not ready yet, waiting...' 
-            sleep 5
-          fi
-        done &&
-        ray start --address=ray-head:6379 --object-store-memory=500000000 --memory=1500000000 &&
-        echo 'Ray worker started successfully' &&
-        tail -f /dev/null
-      "
-    networks:
-      - ray-net
-    
 networks:
-  ray-net:
+  ml-net:
     driver: bridge
