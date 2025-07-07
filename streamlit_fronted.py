@@ -63,7 +63,7 @@ def get_cluster_status():
 
 # --- CLUSTER MANAGEMENT TAB ---
 def cluster_tab():
-    st.header("Gestión del Clúster Ray Distribuido")
+    st.header("🖧 Clúster de Ray")
     
     # Add refresh button for cluster state
     col1, col2 = st.columns([3, 1])
@@ -110,7 +110,7 @@ def cluster_tab():
                 st.warning(f"Could not fetch worker details (timeout or error): {e}")
         
         # Create comprehensive cluster table
-        st.markdown("### 📋 Nodos del Clúster")
+        st.markdown("### 🖧 Nodos")
         
         # Prepare table data
         table_data = []
@@ -125,14 +125,14 @@ def cluster_tab():
         head_cpu_raw = head_node.get("Resources", {}).get("CPU", 2.0) if head_node else 2.0
         head_cpu = min(head_cpu_raw, 8)  # Cap at 8 cores for more realistic display
         head_memory = head_node.get("Resources", {}).get("memory", 4e9) / 1e9 if head_node else 4.0
-        head_status = "🟢 Activo" if head_node and head_node.get("Alive") else "🔴 Inactivo"
+        head_status = "✅ Activo" if head_node and head_node.get("Alive") else "❌ Inactivo"
         
         table_data.append({
-            "Nodo": "🎯 Head Node (ray-head)",
+            "Nodo": "1️⃣ Head Node (ray-head)",
             "CPU": f"{head_cpu}",
             "RAM (GB)": f"{head_memory:.1f}",
             "Estado": head_status,
-            "Tipo": "Coordinador Principal"
+            "Tipo": "Líder"
         })
         
         # Add worker nodes - use same logic as metrics (all Ray nodes except head)
@@ -149,7 +149,7 @@ def cluster_tab():
                     worker_cpu = min(worker['resources'].get('CPU', 4), 4)
                     worker_memory = worker['resources'].get('memory', 2e9) / 1e9
                 
-                status_icon = "🟢"
+                status_icon = "✅"
                 status_text = "Activo"
                 
                 table_data.append({
@@ -157,7 +157,7 @@ def cluster_tab():
                     "CPU": f"{worker_cpu}",
                     "RAM (GB)": f"{worker_memory:.1f}",
                     "Estado": f"{status_icon} {status_text}",
-                    "Tipo": "Nodo de Procesamiento"
+                    "Tipo": "Trabajador"
                 })
         else:
             # Fallback: use Ray cluster info if API data not available
@@ -171,8 +171,8 @@ def cluster_tab():
                         "Nodo": f"⚙️ Worker {i+1} (ray-worker-{i+1})",
                         "CPU": f"{worker_cpu}",
                         "RAM (GB)": f"{worker_memory:.1f}",
-                        "Estado": "🟢 Activo",
-                        "Tipo": "Nodo de Procesamiento"
+                        "Estado": "✅ Activo",
+                        "Tipo": "Trabajador"
                     })
         
         # Display table with current worker count info
@@ -183,7 +183,7 @@ def cluster_tab():
             st.warning("No se pudo obtener información de los nodos del clúster")
         
         # Detailed cluster information
-        with st.expander("🔍 Información Detallada del Clúster"):
+        with st.expander("📥 Información del Clúster"):
             st.json(cluster_status)
     
     else:
@@ -192,8 +192,8 @@ def cluster_tab():
 
 # --- TRAINING TAB ---
 def training_tab():
-    st.header("🚀 Entrenamiento Distribuido de Modelos ML")
-    st.markdown("Suba archivos CSV/JSON para procesamiento y entrenamiento distribuido en el clúster Ray")
+    st.header("🏋🏻‍♀️ Entrenamiento de Modelos de Maching Learning de forma distribuida.")
+    st.markdown("Seleccione el datasets deseados en formato CSV/JSON para realizar el procesamiento y entrenamiento distribuido de modelos de ML en el clúster de Ray.")
     
     # Check for existing trained models (no longer shown in UI, but still fetched for prediction section)
     try:
@@ -234,6 +234,8 @@ def training_tab():
                                         st.write(f"  - {model_name}: {accuracy}")
                                 else:
                                     st.write(f"  - {model_name}: Training completed")
+    
+    st.info("💡 Para realizar el entrenamiento primero suba el datasets deseado y luego seleccione la variable objetivo...")
     
     # Step 1: File Upload
     st.subheader("1. 📁 Subir Archivos CSV/JSON")
@@ -393,7 +395,7 @@ def training_tab():
     # Step 2: File Configuration and Training
     # Only show configuration if files are successfully uploaded and have valid data
     successfully_uploaded_files = {k: v for k, v in st.session_state['uploaded_files'].items() 
-                                  if v and 'rows' in v and 'columns' in v}
+                                    if v and 'rows' in v and 'columns' in v}
     
     # Verify that uploaded files are still accessible in the backend
     if successfully_uploaded_files:
@@ -417,7 +419,7 @@ def training_tab():
                                 del st.session_state['file_configs'][missing_file]
                         # Update the list of successfully uploaded files
                         successfully_uploaded_files = {k: v for k, v in st.session_state['uploaded_files'].items() 
-                                                      if v and 'rows' in v and 'columns' in v}
+                                                        if v and 'rows' in v and 'columns' in v}
                         if not successfully_uploaded_files:
                             st.info("💡 Por favor, vuelve a subir los archivos.")
                     elif missing_files:
@@ -698,7 +700,7 @@ def training_tab():
                         # Additional error handling: check if cluster is healthy
                         cluster_status = get_cluster_status()
                         if "error" in cluster_status:
-                            st.error("🔴 El clúster Ray no está disponible. Verifica que los contenedores estén ejecutándose.")
+                            st.error("❌ El clúster Ray no está disponible. Verifica que los contenedores estén ejecutándose.")
                             st.info("Para resolver el problema, ejecuta: `docker-compose restart`")
                         else:
                             st.info("El clúster está funcionando. El error puede ser temporal. Intenta nuevamente en unos momentos.")
@@ -721,7 +723,7 @@ def training_tab():
                 - Revisa los logs del backend para más detalles: `docker-compose logs backend`
                 """)
             else:
-                st.error(f"🔴 Problema de conectividad: {backend_status['message']}")
+                st.error(f"❌ Problema de conectividad: {backend_status['message']}")
                 st.markdown("""
                 **Para solucionar el problema:**
                 1. Asegúrate que Docker esté ejecutándose
@@ -734,7 +736,7 @@ def training_tab():
 
 # --- PREDICTION TAB ---
 def prediction_tab():
-    st.header("🔮 Model Prediction Interface")
+    st.header("🚀 Predicciones con los modelos entrenados.")
     # Get uploaded files and trained models
     try:
         files_response = requests.get('http://localhost:8000/uploaded_files', timeout=10)
@@ -854,7 +856,7 @@ def prediction_tab():
                                             f"{feature_name}", 
                                             key=f"predict_{feature_name}_{selected_dataset}"
                                         )
-                    if st.button("🔮 Predict", use_container_width=True):
+                    if st.button("🚀 Predict", use_container_width=True):
                         # Prepare feature dict for prediction
                         try:
                             features = {k: (float(v) if v.replace('.','',1).isdigit() else v) for k,v in feature_inputs.items() if v != ''}
@@ -926,10 +928,10 @@ def debug_section():
             st.json(cluster_status)
 
 # --- MAIN APP LAYOUT WITH TABS ---
-st.title("Distributed ML Platform - Visual Interface")
+st.title("Plataforma distribuida de entrenamiento supervisado")
 
 # Create tabs
-tab1, tab2, tab3 = st.tabs(["🏗️ Cluster", "🚀 Training", "🔮 Prediction"])
+tab1, tab2, tab3 = st.tabs(["🖧 Cluster", "🏋🏻‍♀️ Entrenamiento", "🚀 Predicción"])
 
 with tab1:
     cluster_tab()
@@ -942,15 +944,15 @@ with tab3:
 
 # Show backend status in sidebar
 st.sidebar.markdown("---")
-st.sidebar.subheader("Estado del Backend API")
+st.sidebar.subheader("Estado de la API (backend)")
 try:
     response = requests.get('http://localhost:8000/health', timeout=2)
     if response.status_code == 200:
-        st.sidebar.success("🟢 API disponible")
+        st.sidebar.success("✅ API disponible")
     else:
         st.sidebar.warning("⚠️ API con problemas")
 except Exception:
-    st.sidebar.error("🔴 API no disponible")
+    st.sidebar.error("❌ API no disponible")
 
 # Show debug tools
 debug_section()
