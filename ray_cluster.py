@@ -1,6 +1,3 @@
-"""
-Ray utility functions for distributed computing
-"""
 import ray
 import logging
 import time

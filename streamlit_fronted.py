@@ -16,8 +16,7 @@ def ensure_session_state():
         'uploaded_files': {},
         'file_configs': {},
         'last_training_results': None,
-        'last_worker_count': None,
-        'sidebar_section': 'Cluster'  # Default section
+        'last_worker_count': None
     }
     for key, default_value in defaults.items():
         if key not in st.session_state:
@@ -26,41 +25,7 @@ def ensure_session_state():
 # Initialize session state to prevent crashes
 ensure_session_state()
 
-# --- CLUSTER MANAGEMENT ---
-st.sidebar.title("Menú principal")
-
-# Ultra-safe radio widget to prevent crashes during scaling
-section = 'Cluster'  # Default fallback
-try:
-    # Try to get current section safely
-    current_index = 0
-    if 'sidebar_section' in st.session_state:
-        try:
-            current_index = ["Cluster", "Training", "Predicción"].index(st.session_state['sidebar_section'])
-        except (ValueError, KeyError):
-            current_index = 0
-    
-    # Create radio widget with stable key
-    section = st.sidebar.radio(
-        "Selecciona una sección", 
-        ["Cluster", "Training", "Predicción"],
-        index=current_index,
-        key="main_section_radio"  # Stable key for consistent behavior
-    )
-    st.session_state['sidebar_section'] = section
-except Exception as e:
-    st.sidebar.warning("🔄 Menú en modo recuperación")
-    # Use selectbox as fallback
-    try:
-        section = st.sidebar.selectbox(
-            "Selecciona una sección", 
-            ["Cluster", "Training", "Predicción"],
-            index=0,
-            key="fallback_section_selector"
-        )
-    except:
-        section = 'Cluster'  # Ultimate fallback
-
+# --- API STATUS ---
 def check_backend_connectivity():
     """Check if backend is accessible and return status info"""
     try:
@@ -96,9 +61,8 @@ def get_cluster_status():
     except Exception as e:
         return {"error": str(e)}
 
-
-
-if section == "Cluster":
+# --- CLUSTER MANAGEMENT TAB ---
+def cluster_tab():
     st.header("Gestión del Clúster Ray Distribuido")
     
     # Add refresh button for cluster state
@@ -123,9 +87,6 @@ if section == "Cluster":
     if "error" not in cluster_status:
         nodes = cluster_status.get("node_details", [])
         current_worker_count = max(0, len(nodes) - 1) if nodes else 0
-        
-        # Removed info/warning messages for worker count changes
-        
         st.session_state['last_worker_count'] = current_worker_count
     
     if "error" not in cluster_status:
@@ -161,7 +122,6 @@ if section == "Cluster":
             head_node = nodes[0]  # First node is typically the head
         
         # Use realistic CPU values instead of Ray's over-reported values
-        # Ray often reports virtual/logical cores, we'll cap at realistic values
         head_cpu_raw = head_node.get("Resources", {}).get("CPU", 2.0) if head_node else 2.0
         head_cpu = min(head_cpu_raw, 8)  # Cap at 8 cores for more realistic display
         head_memory = head_node.get("Resources", {}).get("memory", 4e9) / 1e9 if head_node else 4.0
@@ -229,26 +189,9 @@ if section == "Cluster":
     else:
         st.warning(f"⚠️ Estado del clúster no disponible: {cluster_status['error']}")
         st.info("💡 Esto puede ocurrir si Ray no está completamente inicializado. Verifica los logs del contenedor.")
-    
-    st.stop()
 
-# --- API STATUS ---
-st.sidebar.markdown("---")
-st.sidebar.subheader("Estado del Backend API")
-try:
-    response = requests.get('http://localhost:8000/health', timeout=2)
-    if response.status_code == 200:
-        st.sidebar.success("🟢 API disponible")
-    else:
-        st.sidebar.warning("⚠️ API con problemas")
-except Exception:
-    st.sidebar.error("🔴 API no disponible")
-
-
-st.title("Distributed ML Platform - Visual Interface")
-
-# --- SECTION: TRAINING ---
-if section == "Training":
+# --- TRAINING TAB ---
+def training_tab():
     st.header("🚀 Entrenamiento Distribuido de Modelos ML")
     st.markdown("Suba archivos CSV/JSON para procesamiento y entrenamiento distribuido en el clúster Ray")
     
@@ -257,7 +200,6 @@ if section == "Training":
         models_response = requests.get('http://localhost:8000/models', timeout=5)
         if models_response.status_code == 200:
             existing_models = models_response.json()
-            # No UI display here; models are used in prediction section only
     except Exception:
         pass  # If check fails, continue normally
     
@@ -292,8 +234,6 @@ if section == "Training":
                                         st.write(f"  - {model_name}: {accuracy}")
                                 else:
                                     st.write(f"  - {model_name}: Training completed")
-    
-    # Session state is already initialized at the top of the file
     
     # Step 1: File Upload
     st.subheader("1. 📁 Subir Archivos CSV/JSON")
@@ -792,10 +732,8 @@ if section == "Training":
         else:
             st.info("💡 Primero selecciona y procesa archivos CSV o JSON para continuar con la configuración de entrenamiento.")
 
-
-
-# --- SECTION: PREDICTION ---
-if section == "Predicción":
+# --- PREDICTION TAB ---
+def prediction_tab():
     st.header("🔮 Model Prediction Interface")
     # Get uploaded files and trained models
     try:
@@ -945,8 +883,9 @@ if section == "Predicción":
             st.error("❌ Failed to get uploaded files or models from backend.")
     except Exception as e:
         st.error(f"❌ Error connecting to backend: {e}")
-    
-    # Debug section (can be removed in production)
+
+# --- DEBUG SECTION ---
+def debug_section():
     with st.sidebar.expander("🔧 Debug Tools"):
         if st.button("Clear Session State"):
             st.session_state['uploaded_files'] = {}
@@ -985,3 +924,33 @@ if section == "Predicción":
         if st.button("Check Cluster Status"):
             cluster_status = get_cluster_status()
             st.json(cluster_status)
+
+# --- MAIN APP LAYOUT WITH TABS ---
+st.title("Distributed ML Platform - Visual Interface")
+
+# Create tabs
+tab1, tab2, tab3 = st.tabs(["🏗️ Cluster", "🚀 Training", "🔮 Prediction"])
+
+with tab1:
+    cluster_tab()
+
+with tab2:
+    training_tab()
+
+with tab3:
+    prediction_tab()
+
+# Show backend status in sidebar
+st.sidebar.markdown("---")
+st.sidebar.subheader("Estado del Backend API")
+try:
+    response = requests.get('http://localhost:8000/health', timeout=2)
+    if response.status_code == 200:
+        st.sidebar.success("🟢 API disponible")
+    else:
+        st.sidebar.warning("⚠️ API con problemas")
+except Exception:
+    st.sidebar.error("🔴 API no disponible")
+
+# Show debug tools
+debug_section()

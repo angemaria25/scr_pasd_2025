@@ -1,6 +1,3 @@
-"""
-Simplified data loading utilities for the Streamlit-driven ML platform
-"""
 import os
 import pandas as pd
 import numpy as np

@@ -1,6 +1,3 @@
-"""
-Model serving API for distributed ML platform using FastAPI - Cleaned version
-"""
 import base64
 import io
 import json

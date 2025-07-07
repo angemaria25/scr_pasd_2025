@@ -1,6 +1,3 @@
-"""
-Model training utilities for distributed machine learning with fault tolerance (Ray-native, no file I/O)
-"""
 import ray
 import logging
 import numpy as np
