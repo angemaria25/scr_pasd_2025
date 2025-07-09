@@ -8,7 +8,6 @@ import time
 
 st.set_page_config(page_title="Plataforma distribuida de entrenamiento supervisado", layout="wide")
 
-# --- Robust session state initialization ---
 def ensure_session_state():
     """Initialize all session state variables to prevent KeyError crashes"""
     defaults = {
@@ -181,9 +180,162 @@ def cluster_tab():
         else:
             st.warning("No se pudo obtener información de los nodos del clúster")
         
-        # Detailed cluster information
-        with st.expander("📥 Información del Clúster"):
+        # Node selection for detailed information
+        st.markdown("#### 🔍 Información Detallada de Nodos")
+        
+        # Create list of available nodes for selection
+        available_nodes = ["Información General del Clúster"]
+        node_details = {}
+        
+        # Add head node
+        if head_node:
+            node_name = "Head Node (ray-head)"
+            available_nodes.append(node_name)
+            node_details[node_name] = head_node
+        
+        # Add worker nodes
+        if worker_details:
+            for worker in worker_details:
+                worker_name = f"Worker {worker['number']} ({worker['name']})"
+                available_nodes.append(worker_name)
+                # Create detailed info for worker
+                worker_info = {
+                    "NodeID": worker.get('name', 'N/A'),
+                    "Alive": True,
+                    "Resources": worker.get('resources', {}),
+                    "WorkerNumber": worker['number']
+                }
+                node_details[worker_name] = worker_info
+        else:
+            # Fallback to Ray cluster nodes if API data not available
+            for i, worker_node in enumerate(worker_nodes):
+                if worker_node.get("Alive"):
+                    worker_name = f"Worker {i+1} (ray-worker-{i+1})"
+                    available_nodes.append(worker_name)
+                    node_details[worker_name] = worker_node
+        
+        # Node selection dropdown
+        selected_node = st.selectbox(
+            "Seleccionar nodo para ver información detallada:",
+            available_nodes,
+            help="Selecciona un nodo específico para ver su información completa"
+        )
+        
+        # Show detailed information based on selection
+        if selected_node == "Información General del Clúster":
+            st.markdown("**📊 Resumen General del Clúster:**")
+            general_info = {
+                "Total de Nodos": len(cluster_status.get("node_details", [])),
+                "Nodos Activos": len([n for n in cluster_status.get("node_details", []) if n.get("Alive")]),
+                "Workers Disponibles": len(worker_details) if worker_details else len(worker_nodes),
+                "Estado del Clúster": "Activo" if cluster_status.get("node_details") else "Inactivo"
+            }
+            
+            # Display as metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Nodos", general_info["Total de Nodos"])
+            with col2:
+                st.metric("Nodos Activos", general_info["Nodos Activos"])
+            with col3:
+                st.metric("Workers", general_info["Workers Disponibles"])
+            with col4:
+                st.metric("Estado", general_info["Estado del Clúster"])
+            
+            # Show full cluster status in a more organized way
+            st.markdown("**🔧 Configuración Completa del Clúster:**")
             st.json(cluster_status)
+        else:
+            # Show specific node information
+            if selected_node in node_details:
+                node_info = node_details[selected_node]
+                st.markdown(f"**📋 Información Detallada: {selected_node}**")
+                
+                # Show key metrics for the selected node
+                if "Resources" in node_info:
+                    resources = node_info["Resources"]
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        cpu_count = resources.get("CPU", "N/A")
+                        if isinstance(cpu_count, (int, float)):
+                            cpu_count = min(cpu_count, 8) if "Head" in selected_node else min(cpu_count, 4)
+                        st.metric("CPU Cores", f"{cpu_count}")
+                    
+                    with col2:
+                        memory = resources.get("memory", 0)
+                        if isinstance(memory, (int, float)):
+                            memory_gb = memory / 1e9
+                            st.metric("RAM (GB)", f"{memory_gb:.1f}")
+                        else:
+                            st.metric("RAM (GB)", "N/A")
+                    
+                    with col3:
+                        status = "✅ Activo" if node_info.get("Alive", False) else "❌ Inactivo"
+                        st.metric("Estado", status)
+                
+                # Show complete node information in table format
+                st.markdown("**🔧 Información Completa del Nodo:**")
+                
+                # Convert node info to a more readable table format
+                def format_node_info_table(node_data):
+                    """Convert node information to a structured table format"""
+                    table_data = []
+                    
+                    def add_row(key, value, category="General"):
+                        if isinstance(value, dict):
+                            # For nested dictionaries, add each key-value pair
+                            for sub_key, sub_value in value.items():
+                                table_data.append({
+                                    "Categoría": category,
+                                    "Propiedad": f"{key}.{sub_key}",
+                                    "Valor": str(sub_value)
+                                })
+                        elif isinstance(value, list):
+                            # For lists, join elements or show count
+                            if len(value) > 0:
+                                table_data.append({
+                                    "Categoría": category,
+                                    "Propiedad": key,
+                                    "Valor": f"Lista con {len(value)} elementos: {', '.join(map(str, value[:3]))}" + ("..." if len(value) > 3 else "")
+                                })
+                            else:
+                                table_data.append({
+                                    "Categoría": category,
+                                    "Propiedad": key,
+                                    "Valor": "Lista vacía"
+                                })
+                        else:
+                            table_data.append({
+                                "Categoría": category,
+                                "Propiedad": key,
+                                "Valor": str(value)
+                            })
+                    
+                    # Process each key in node_data
+                    for key, value in node_data.items():
+                        if key == "Resources":
+                            add_row(key, value, "Recursos")
+                        elif key in ["NodeID", "Alive", "WorkerNumber"]:
+                            add_row(key, value, "Identificación")
+                        elif key in ["NodeManagerAddress", "NodeManagerPort", "ObjectManagerPort"]:
+                            add_row(key, value, "Red")
+                        elif key in ["CPU", "memory", "node", "object_store_memory"]:
+                            add_row(key, value, "Recursos")
+                        else:
+                            add_row(key, value, "Otros")
+                    
+                    return table_data
+                
+                # Create and display the table
+                table_data = format_node_info_table(node_info)
+                if table_data:
+                    df_node_info = pd.DataFrame(table_data)
+                    st.dataframe(df_node_info, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No hay información detallada disponible para este nodo")
+            else:
+                st.error("No se pudo obtener información para el nodo seleccionado")
     
     else:
         st.warning(f"Clúster no disponible: {cluster_status['error']}")
@@ -234,26 +386,6 @@ def training_tab():
                                     st.write(f"  - {model_name}: Entrenamiento completado")
     
     st.info("💡 Para realizar el entrenamiento primero suba el dataset deseado y luego seleccione la variable objetivo y los modelos a entrenar")
-
-    # Add distributed memory clear button
-    if st.button("🧹 Limpiar Memoria", help="Limpia toda la memoria y los modelos entrenados para evitar desbordamientos y empezar de cero."):
-        with st.spinner("Limpiando memoria y recursos del clúster..."):
-            try:
-                response = requests.post("http://localhost:8000/clear_memory", timeout=60)
-                if response.status_code == 200:
-                    st.session_state['uploaded_files'] = {}
-                    st.session_state['file_configs'] = {}
-                    st.session_state['last_training_results'] = None
-                    st.success("✅ Memoria limpiada correctamente. Puedes subir nuevos archivos y entrenar modelos desde cero.")
-                    st.rerun()
-                else:
-                    try:
-                        error_msg = response.json().get('detail', response.text)
-                    except Exception:
-                        error_msg = response.text
-                    st.error(f"❌ Error al limpiar memoria: {error_msg}")
-            except Exception as e:
-                st.error(f"❌ Error de conexión al limpiar memoria: {e}")
 
     # File uploader for multiple files
     uploaded_files = st.file_uploader(
@@ -419,7 +551,7 @@ def training_tab():
                             st.info("💡 Por favor, vuelve a subir los archivos.")
                     elif missing_files:
                         # Some files missing but not all - show info message
-                        st.info(f"ℹ️ Algunos archivos ({missing_files}) no están disponibles en el backend. Esto puede ocurrir si se han agregado/eliminado workers o si el clúster se ha reconfigurado. Si persisten los problemas, vuelve a subir los archivos.")
+                        st.info(f"Algunos archivos ({missing_files}) no están disponibles en el backend. Esto puede ocurrir si se han agregado/eliminado workers o si el clúster se ha reconfigurado. Si persisten los problemas, vuelve a subir los archivos.")
         except Exception:
             pass  # If backend check fails, continue with cached session state
     
@@ -840,62 +972,22 @@ def prediction_tab():
     except Exception as e:
         st.error(f"❌ Error conectando al backend: {e}")
 
-# --- DEBUG SECTION ---
-def debug_section():
-    with st.sidebar.expander("🔧 Herramientas de Debug"):
-        if st.button("Limpiar Estado de Sesión"):
-            st.session_state['uploaded_files'] = {}
-            st.session_state['file_configs'] = {}
-            st.session_state['last_training_results'] = None
-            st.success("Estado de sesión limpiado")
-            st.rerun()
-        
-        if st.button("Mostrar Estado de Sesión"):
-            st.json({
-                "uploaded_files": st.session_state.get('uploaded_files', {}),
-                "file_configs": st.session_state.get('file_configs', {}),
-                "last_training_results": st.session_state.get('last_training_results')
-            })
-        
-        if st.button("Verificar Archivos Subidos del Backend"):
-            try:
-                response = requests.get('http://localhost:8000/uploaded_files', timeout=10)
-                if response.status_code == 200:
-                    st.json(response.json())
-                else:
-                    st.error(f"Error del backend: {response.text}")
-            except Exception as e:
-                st.error(f"Error de conexión: {e}")
-        
-        if st.button("Verificar Modelos Entrenados"):
-            try:
-                response = requests.get('http://localhost:8000/models', timeout=10)
-                if response.status_code == 200:
-                    st.json(response.json())
-                else:
-                    st.error(f"Error del backend: {response.text}")
-            except Exception as e:
-                st.error(f"Error de conexión: {e}")
-                
-        if st.button("Verificar Estado del Clúster"):
-            cluster_status = get_cluster_status()
-            st.json(cluster_status)
 
 
 st.title("Plataforma distribuida de entrenamiento supervisado")
 
-tab1, tab2, tab3 = st.tabs(["🖧 Cluster", "🏋🏻‍♀️ Entrenamiento", "🚀 Predicción"])
+# Single page layout - all sections in sequence
+cluster_tab()
 
-with tab1:
-    cluster_tab()
+st.markdown("---")  # Separator between sections
 
-with tab2:
-    training_tab()
+training_tab()
 
-with tab3:
-    prediction_tab()
+st.markdown("---")  # Separator between sections
 
-# Show backend status in sidebar
+prediction_tab()
+
+# Show backend status and clear memory button in sidebar
 st.sidebar.markdown("---")
 st.sidebar.subheader("Estado de la API (backend)")
 try:
@@ -907,5 +999,24 @@ try:
 except Exception:
     st.sidebar.error("❌ API no disponible")
 
-# Show debug tools
-debug_section()
+# Add clear memory button to sidebar
+st.sidebar.markdown("---")
+st.sidebar.subheader("Herramientas")
+if st.sidebar.button("🧹 Limpiar Memoria", help="Limpia toda la memoria y los modelos entrenados para evitar desbordamientos y empezar de cero.", use_container_width=True):
+    with st.spinner("Limpiando memoria y recursos del clúster..."):
+        try:
+            response = requests.post("http://localhost:8000/clear_memory", timeout=60)
+            if response.status_code == 200:
+                st.session_state['uploaded_files'] = {}
+                st.session_state['file_configs'] = {}
+                st.session_state['last_training_results'] = None
+                st.sidebar.success("✅ Memoria limpiada correctamente")
+                st.rerun()
+            else:
+                try:
+                    error_msg = response.json().get('detail', response.text)
+                except Exception:
+                    error_msg = response.text
+                st.sidebar.error(f"❌ Error al limpiar memoria: {error_msg}")
+        except Exception as e:
+            st.sidebar.error(f"❌ Error de conexión: {e}")
