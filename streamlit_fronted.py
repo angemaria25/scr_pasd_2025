@@ -984,10 +984,31 @@ if st.sidebar.button("🧹 Limpiar Memoria", help="Limpia toda la memoria y los 
         try:
             response = requests.post("http://localhost:8000/clear_memory", timeout=60)
             if response.status_code == 200:
+                result = response.json()
+                
+                # Clear frontend session state
                 st.session_state['uploaded_files'] = {}
                 st.session_state['file_configs'] = {}
                 st.session_state['last_training_results'] = None
-                st.sidebar.success("✅ Memoria limpiada correctamente")
+                
+                # Show detailed cleanup results
+                actors_cleared = result.get('actors_cleared', 0)
+                datasets_cleared = result.get('datasets_cleared', 0)
+                remaining_actors = result.get('remaining_actors', 0)
+                remaining_files = result.get('remaining_files', 0)
+                failed_actors = result.get('failed_actors', [])
+                
+                if actors_cleared > 0 or datasets_cleared > 0:
+                    st.sidebar.success(f"✅ Memoria limpiada: {actors_cleared} modelos y {datasets_cleared} datasets eliminados")
+                    
+                    if remaining_actors > 0 or remaining_files > 0:
+                        st.sidebar.warning(f"⚠️ Quedan: {remaining_actors} actores y {remaining_files} archivos")
+                    
+                    if failed_actors:
+                        st.sidebar.warning(f"⚠️ No se pudieron eliminar {len(failed_actors)} actores")
+                else:
+                    st.sidebar.info("ℹ️ No había datos para limpiar")
+                
                 st.rerun()
             else:
                 try:
