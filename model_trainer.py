@@ -55,19 +55,14 @@ def train_model(model, X_train, y_train, X_test, y_test, model_name=None):
         # Make predictions
         y_pred = model.predict(X_test)
         
-        # Calculate metrics
+        # Calculate metrics - All models are now regression models
         metrics = {}
+        metrics['mse'] = mean_squared_error(y_test, y_pred)
+        metrics['rmse'] = np.sqrt(metrics['mse'])
         
-        # Classification metrics
-        if len(np.unique(y_train)) < 10:  # Assuming it's a classification task if fewer than 10 unique values
-            metrics['accuracy'] = accuracy_score(y_test, y_pred)
-            metrics['precision'] = precision_score(y_test, y_pred, average='weighted', zero_division=0)
-            metrics['recall'] = recall_score(y_test, y_pred, average='weighted', zero_division=0)
-            metrics['f1'] = f1_score(y_test, y_pred, average='weighted', zero_division=0)
-        # Regression metrics
-        else:
-            metrics['mse'] = mean_squared_error(y_test, y_pred)
-            metrics['rmse'] = np.sqrt(metrics['mse'])
+        # Add R² score for regression
+        from sklearn.metrics import r2_score
+        metrics['r2_score'] = r2_score(y_test, y_pred)
             
         metrics['training_time'] = training_time
         

@@ -12,7 +12,7 @@ services:
     environment:
       - RAY_DISABLE_IMPORT_WARNING=1
       - STREAMLIT_SERVER_PORT=8501
-    shm_size: '1.5gb' # memoria compartida suficiente para Ray
+    shm_size: '2gb' # memoria compartida suficiente para Ray
     mem_limit: 2g     # límite RAM contenedor head
   
     command: >
@@ -20,7 +20,7 @@ services:
         echo 'Starting Ray head node...' &&
         ray start --head --port=6379 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265 --object-store-memory=300000000 --num-cpus=2 --memory=1500000000 &&
         echo 'Ray head started, waiting for full initialization...' &&
-        sleep 120 &&
+        sleep 20 &&
         echo 'Starting FastAPI and Streamlit...' &&
         uvicorn inicio:app --host 0.0.0.0 --port 8000 --reload &
         streamlit run streamlit_fronted.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true

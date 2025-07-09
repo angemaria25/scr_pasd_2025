@@ -533,8 +533,8 @@ def create_app(model_names):
                         }
                         continue
                     
-                    # Convert task name to classification/regression
-                    is_classification = task_type == "classification"
+                    # All models are now regression models
+                    is_classification = False
                     
                     # Split features and target
                     if target_column not in df.columns:
@@ -547,23 +547,24 @@ def create_app(model_names):
                     X = df.drop(target_column, axis=1)
                     y = df[target_column]
                     
-                    # Auto-detect and handle target variable type for classification
-                    if is_classification:
-                        # Check if target is continuous and needs to be converted
-                        unique_values = y.nunique()
-                        is_numeric = pd.api.types.is_numeric_dtype(y)
-                        
-                        logger.info(f"Target column '{target_column}' analysis: {unique_values} unique values, numeric: {is_numeric}")
-                        
-                        if is_numeric and unique_values > 10:
-                            # Likely continuous variable - convert to binary classification or suggest regression
-                            logger.warning(f"Target '{target_column}' appears to be continuous ({unique_values} unique values). Converting to binary classification.")
-                            median_value = y.median()
-                            y = (y > median_value).astype(int)
-                            logger.info(f"Converted target to binary: 0 (≤{median_value}), 1 (>{median_value})")
-                        elif is_numeric:
-                            # Make sure it's integer type for classification
-                            y = y.astype(int)
+                    # Ensure target is numeric for regression
+                    if not pd.api.types.is_numeric_dtype(y):
+                        try:
+                            y = pd.to_numeric(y, errors='coerce')
+                            if y.isna().any():
+                                batch_results[filename] = {
+                                    "status": "error",
+                                    "error": f"Target column '{target_column}' contains non-numeric values that cannot be converted"
+                                }
+                                continue
+                        except Exception as e:
+                            batch_results[filename] = {
+                                "status": "error",
+                                "error": f"Failed to convert target column to numeric: {str(e)}"
+                            }
+                            continue
+                    
+                    logger.info(f"Target column '{target_column}' prepared for regression with {y.nunique()} unique values")
                     
                     # Convert categorical features to numeric
                     X = pd.get_dummies(X)
@@ -571,34 +572,19 @@ def create_app(model_names):
                     # Train split
                     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
                     
-                    # Define available models based on task type
-                    if is_classification:
-                        from sklearn.ensemble import GradientBoostingClassifier
-                        from sklearn.linear_model import LogisticRegression
-                        from sklearn.svm import SVC
-                        from sklearn.neighbors import KNeighborsClassifier
-                        from sklearn.tree import DecisionTreeClassifier
-                        
-                        model_mapping = {
-                            "decision_tree": DecisionTreeClassifier(random_state=random_state),
-                            "gradient_boosting": GradientBoostingClassifier(random_state=random_state),
-                            "logistic_regression": LogisticRegression(max_iter=1000, random_state=random_state),
-                            "svm": SVC(probability=True, random_state=random_state),
-                            "k_nearest_neighbors": KNeighborsClassifier(n_neighbors=5)
-                        }
-                    else:
-                        from sklearn.ensemble import GradientBoostingRegressor
-                        from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
-                        from sklearn.tree import DecisionTreeRegressor
-                        
-                        model_mapping = {
-                            "decision_tree_regressor": DecisionTreeRegressor(random_state=random_state),
-                            "gradient_boosting_regressor": GradientBoostingRegressor(random_state=random_state),
-                            "linear_regression": LinearRegression(),
-                            "ridge_regression": Ridge(random_state=random_state),
-                            "lasso_regression": Lasso(random_state=random_state),
-                            "elastic_net": ElasticNet(random_state=random_state)
-                        }
+                    # Define available regression models
+                    from sklearn.ensemble import GradientBoostingRegressor
+                    from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
+                    from sklearn.tree import DecisionTreeRegressor
+                    
+                    model_mapping = {
+                        "decision_tree_regressor": DecisionTreeRegressor(random_state=random_state),
+                        "gradient_boosting_regressor": GradientBoostingRegressor(random_state=random_state),
+                        "linear_regression": LinearRegression(),
+                        "ridge_regression": Ridge(random_state=random_state),
+                        "lasso_regression": Lasso(random_state=random_state),
+                        "elastic_net": ElasticNet(random_state=random_state)
+                    }
                     
                     # Filter models based on user selection
                     dataset_name = filename.replace('.csv', '').replace('.json', '')

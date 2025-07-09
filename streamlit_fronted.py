@@ -440,60 +440,38 @@ def training_tab():
                     preview_df = pd.DataFrame(file_info['preview'])
                     st.dataframe(preview_df, use_container_width=True)
 
-            col1, col2 = st.columns(2)
-
-            with col1:
-                # Smart task type detection based on filename
-                default_task_type = "classification"
-                if "housing" in filename.lower() or "price" in filename.lower() or "regression" in filename.lower():
-                    default_task_type = "regression"
-                elif "classification" in filename.lower() or "cancer" in filename.lower():
-                    default_task_type = "classification"
-                # Task type selection with smart default
-                default_index = 0 if default_task_type == "classification" else 1
-                task_type = st.selectbox(
-                    "Task Type",
-                    ["classification", "regression"],
-                    index=default_index,
-                    key=f"task_{filename}",
-                    help=f"Recommended: {default_task_type} (based on filename analysis)"
-                )
-
-            with col2:
-                # Smart target column detection
+            # Smart target column detection
+            default_target = "target"
+            if "target" in file_info['columns']:
                 default_target = "target"
-                if "target" in file_info['columns']:
-                    default_target = "target"
-                elif "price" in [col.lower() for col in file_info['columns']]:
-                    default_target = next(col for col in file_info['columns'] if col.lower() == "price")
-                elif "value" in [col.lower() for col in file_info['columns']]:
-                    default_target = next(col for col in file_info['columns'] if col.lower() == "value")
-                elif any("y" == col.lower() for col in file_info['columns']):
-                    default_target = next(col for col in file_info['columns'] if col.lower() == "y")
-                # Target column selection with smart default
-                try:
-                    default_index = file_info['columns'].index(default_target)
-                except ValueError:
-                    default_index = 0
-                target_column = st.selectbox(
-                    "Target Column",
-                    file_info['columns'],
-                    index=default_index,
-                    key=f"target_{filename}",
-                    help=f"The column to predict. Usually named 'target', 'price', 'value', or 'y'"
-                )
+            elif "price" in [col.lower() for col in file_info['columns']]:
+                default_target = next(col for col in file_info['columns'] if col.lower() == "price")
+            elif "value" in [col.lower() for col in file_info['columns']]:
+                default_target = next(col for col in file_info['columns'] if col.lower() == "value")
+            elif any("y" == col.lower() for col in file_info['columns']):
+                default_target = next(col for col in file_info['columns'] if col.lower() == "y")
+            # Target column selection with smart default
+            try:
+                default_index = file_info['columns'].index(default_target)
+            except ValueError:
+                default_index = 0
+            target_column = st.selectbox(
+                "Target Column",
+                file_info['columns'],
+                index=default_index,
+                key=f"target_{filename}",
+                help=f"The column to predict. Usually named 'target', 'price', 'value', or 'y'"
+            )
 
-            # Algorithm selection - Multiple selection
-            if task_type == "classification":
-                algorithms = ["Decision Tree", "Gradient Boosting", "SVM", "Logistic Regression", "K-Nearest Neighbors"]
-            else:
-                algorithms = ["Decision Tree Regressor", "Gradient Boosting Regressor", "Linear Regression", "Ridge Regression", "Lasso Regression", "Elastic Net"]
+            # Algorithm selection - Only regression models
+            task_type = "regression"  # Fixed to regression only
+            algorithms = ["Decision Tree Regressor", "Gradient Boosting Regressor", "Linear Regression", "Ridge Regression", "Lasso Regression", "Elastic Net"]
             selected_algorithms = st.multiselect(
-                "Select Models to Train (you can select multiple)",
+                "Select Regression Models to Train (you can select multiple)",
                 algorithms,
                 default=[algorithms[0]],  # Default to first algorithm
                 key=f"algos_{filename}",
-                help="You can select multiple models to train and compare their performance"
+                help="You can select multiple regression models to train and compare their performance"
             )
 
             # Advanced parameters section (not nested in expander)
@@ -612,70 +590,49 @@ def training_tab():
                                             if 'results' in dataset_result:
                                                 for model_name, model_result in dataset_result['results'].items():
                                                     st.markdown(f"**{model_name}:**")
-                                                    # Improved model type detection
-                                                    algo_name = model_result.get('algorithm', '').lower() if 'algorithm' in model_result else model_name.lower()
-                                                    classification_keywords = [
-                                                        'class', 'logistic', 'svm', 'knn', 'forest', 'tree', 'neighbor'
-                                                    ]
-                                                    regression_keywords = [
-                                                        'regress', 'linear', 'ridge', 'lasso', 'elastic', 'svr', 'bayesian', 'huber', 'quantile'
-                                                    ]
-                                                    is_classification = any(word in algo_name for word in classification_keywords)
-                                                    is_regression = any(word in algo_name for word in regression_keywords)
-
-                                                    # Main metric display
-                                                    if is_classification:
-                                                        # Extract accuracy from different possible locations
-                                                        accuracy = model_result.get('accuracy')
-                                                        if accuracy is None:
-                                                            accuracy = model_result.get('metrics', {}).get('accuracy')
-                                                        if accuracy is None:
-                                                            accuracy = model_result.get('test_score')
-                                                        if accuracy is not None:
-                                                            try:
-                                                                accuracy_float = float(accuracy)
-                                                                st.info(f"🎯 Accuracy: {accuracy_float:.4f}")
-                                                            except (ValueError, TypeError):
-                                                                st.info(f"🎯 Accuracy: {accuracy}")
-                                                        else:
-                                                            st.warning("🎯 Accuracy: Not available")
-                                                    elif is_regression:
-                                                        # Prefer RMSE, then MSE, then test_score
-                                                        rmse = model_result.get('metrics', {}).get('rmse') if 'metrics' in model_result else None
-                                                        if rmse is None:
-                                                            rmse = model_result.get('rmse')
-                                                        if rmse is not None:
-                                                            try:
-                                                                rmse_float = float(rmse)
-                                                                st.info(f"📉 RMSE: {rmse_float:.4f}")
-                                                            except (ValueError, TypeError):
-                                                                st.info(f"📉 RMSE: {rmse}")
-                                                        else:
-                                                            st.warning("📉 RMSE: Not available")
+                                                    # All models are regression models now
+                                                    st.markdown(f"**{model_name}** (Regression Model)")
+                                                    
+                                                    # Display RMSE as primary metric
+                                                    rmse = model_result.get('metrics', {}).get('rmse') if 'metrics' in model_result else None
+                                                    if rmse is None:
+                                                        rmse = model_result.get('rmse')
+                                                    if rmse is not None:
+                                                        try:
+                                                            rmse_float = float(rmse)
+                                                            st.info(f"📉 RMSE: {rmse_float:.4f}")
+                                                        except (ValueError, TypeError):
+                                                            st.info(f"📉 RMSE: {rmse}")
                                                     else:
-                                                        st.info("ℹ️ Model type not detected. Metrics below.")
+                                                        st.warning("📉 RMSE: Not available")
+                                                    
+                                                    # Display R² score as secondary metric
+                                                    r2 = model_result.get('metrics', {}).get('r2_score') if 'metrics' in model_result else None
+                                                    if r2 is not None:
+                                                        try:
+                                                            r2_float = float(r2)
+                                                            st.info(f"📊 R² Score: {r2_float:.4f}")
+                                                        except (ValueError, TypeError):
+                                                            st.info(f"📊 R² Score: {r2}")
+                                                    
+                                                    # Display MSE as additional metric
+                                                    mse = model_result.get('metrics', {}).get('mse') if 'metrics' in model_result else None
+                                                    if mse is not None:
+                                                        try:
+                                                            mse_float = float(mse)
+                                                            st.info(f"📈 MSE: {mse_float:.4f}")
+                                                        except (ValueError, TypeError):
+                                                            st.info(f"📈 MSE: {mse}")
 
                                                     # Show additional metrics if available
                                                     if 'metrics' in model_result and model_result['metrics']:
                                                         st.markdown("**Detailed metrics:**")
                                                         st.json(model_result['metrics'])
 
-                                                    # Visualizations: ROC curve (classification) and learning curve (all)
+                                                    # Visualizations: Only learning curve for regression models
                                                     col_viz1, col_viz2 = st.columns(2)
                                                     with col_viz1:
-                                                        if is_classification:
-                                                            try:
-                                                                roc_response = requests.get(f'http://localhost:8000/visualization/{model_name}/roc_curve', timeout=15)
-                                                                content_type = roc_response.headers.get('content-type', '')
-                                                                content_len = len(roc_response.content)
-                                                                if roc_response.status_code == 200 and content_type.startswith('image') and content_len > 100:
-                                                                    st.image(roc_response.content, caption=f"ROC Curve - {model_name}")
-                                                                elif roc_response.status_code == 200 and content_len > 0 and not content_type.startswith('image'):
-                                                                    st.warning(f"ROC curve not available (backend returned non-image content).")
-                                                                else:
-                                                                    st.warning("ROC curve not available.")
-                                                            except Exception as e:
-                                                                st.warning(f"ROC curve error: {e}")
+                                                        st.info("📊 ROC curves are not applicable for regression models")
                                                     with col_viz2:
                                                         try:
                                                             learning_response = requests.get(f'http://localhost:8000/visualization/{model_name}/learning_curve', timeout=60)
