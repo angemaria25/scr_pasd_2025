@@ -9,7 +9,7 @@ import time
 st.set_page_config(page_title="Plataforma distribuida de entrenamiento supervisado", layout="wide")
 
 def ensure_session_state():
-    """Inicializa todas las variables de estado de la sesión para prevenir errores de tipo KeyError."""
+    """Initialize all session state variables to prevent KeyError crashes"""
     defaults = {
         'cluster': {'head': {'cpu': 2, 'ram': 4, 'running': False}},
         'uploaded_files': {},
@@ -24,8 +24,9 @@ def ensure_session_state():
 # Initialize session state to prevent crashes
 ensure_session_state()
 
+# --- API STATUS ---
 def check_backend_connectivity():
-    """Verifica si el backend es accesible y devuelve información del estado"""
+    """Check if backend is accessible and return status info"""
     try:
         response = requests.get('http://localhost:8000/health', timeout=5)
         if response.status_code == 200:
@@ -40,7 +41,7 @@ def check_backend_connectivity():
         return {"status": "error", "message": f"Connection error: {str(e)}"}
 
 def get_workers_from_api():
-    """Obtén información de los trabajadores directamente de la API"""
+    """Get workers information directly from API"""
     try:
         response = requests.get('http://localhost:8000/cluster/workers', timeout=10)
         if response.status_code == 200:
@@ -50,6 +51,7 @@ def get_workers_from_api():
         return {"error": str(e), "success": False}
 
 def get_cluster_status():
+    """Get cluster status from backend API"""
     try:
         response = requests.get('http://localhost:8000/cluster/status', timeout=15)
         if response.status_code == 200:
@@ -58,15 +60,17 @@ def get_cluster_status():
     except Exception as e:
         return {"error": str(e)}
 
-
+# --- CLUSTER MANAGEMENT TAB ---
 def cluster_tab():
     st.header("🖧 Clúster Ray")
     
+    # Add refresh button for cluster state
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.write("") 
+        st.write("")  # Empty space
     with col2:
-        if st.button("Actualizar", help="Consulta la API para obtener el estado actual de todos los workers"):
+        if st.button("🔄 Refrescar workers", help="Consulta la API para obtener el estado actual de todos los workers"):
+            # Force refresh by clearing any cached data and re-querying API
             st.cache_data.clear()
             workers_info = get_workers_from_api()
             if workers_info.get("success"):
@@ -75,19 +79,24 @@ def cluster_tab():
                 st.error(f"❌ Error consultando workers: {workers_info.get('error', 'Unknown error')}")
             st.rerun()
     
+    # Get real cluster status from backend
     cluster_status = get_cluster_status()
     
+    # Detect changes in worker count
     if "error" not in cluster_status:
         nodes = cluster_status.get("node_details", [])
         current_worker_count = max(0, len(nodes) - 1) if nodes else 0
         st.session_state['last_worker_count'] = current_worker_count
     
     if "error" not in cluster_status:
+        
+        # Get worker details from backend API
         workers_api_response = get_workers_from_api()
         worker_details = []
         if workers_api_response.get("success"):
             worker_details = workers_api_response.get("workers", [])
         
+        # Also try the original endpoint as fallback
         if not worker_details:
             try:
                 workers_response = requests.get('http://localhost:8000/cluster/workers', timeout=15)
@@ -98,15 +107,19 @@ def cluster_tab():
             except Exception as e:
                 st.warning(f"Could not fetch worker details (timeout or error): {e}")
         
+        # Create comprehensive cluster table
         st.markdown("#### 🖧 Nodos")
         
+        # Prepare table data
         table_data = []
         
+        # Add head node
         nodes = cluster_status.get("node_details", [])
         head_node = None
         if nodes:
-            head_node = nodes[0] 
-            
+            head_node = nodes[0]  # First node is typically the head
+        
+        # Use realistic CPU values instead of Ray's over-reported values
         head_cpu_raw = head_node.get("Resources", {}).get("CPU", 2.0) if head_node else 2.0
         head_cpu = min(head_cpu_raw, 8)  # Cap at 8 cores for more realistic display
         head_memory = head_node.get("Resources", {}).get("memory", 4e9) / 1e9 if head_node else 4.0
@@ -120,12 +133,15 @@ def cluster_tab():
             "Tipo": "Líder"
         })
         
-        worker_nodes = nodes[1:] if len(nodes) > 1 else []  
+        # Add worker nodes - use same logic as metrics (all Ray nodes except head)
+        worker_nodes = nodes[1:] if len(nodes) > 1 else []  # All nodes except head
         
+        # Build worker table using API data
         if worker_details:
             for worker in worker_details:
-                worker_cpu = 4 
-                worker_memory = 2.0  
+                # Get CPU and memory from worker resources
+                worker_cpu = 4  # Default
+                worker_memory = 2.0  # Default
                 
                 if 'resources' in worker:
                     worker_cpu = min(worker['resources'].get('CPU', 4), 4)
@@ -142,6 +158,7 @@ def cluster_tab():
                     "Tipo": "Trabajador"
                 })
         else:
+            # Fallback: use Ray cluster info if API data not available
             for i, worker_node in enumerate(worker_nodes):
                 if worker_node.get("Alive"):
                     worker_cpu_raw = worker_node.get("Resources", {}).get("CPU", 2.0)
@@ -156,27 +173,32 @@ def cluster_tab():
                         "Tipo": "Trabajador"
                     })
         
+        # Display table with current worker count info
         if table_data:
             df = pd.DataFrame(table_data)
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.warning("No se pudo obtener información de los nodos del clúster")
         
-        st.markdown("#### Información de los Nodos")
+        # Node selection for detailed information
+        st.markdown("#### 🔍 Información Detallada de Nodos")
         
+        # Create list of available nodes for selection
         available_nodes = ["Información General del Clúster"]
         node_details = {}
-    
+        
+        # Add head node
         if head_node:
             node_name = "Head Node (ray-head)"
             available_nodes.append(node_name)
             node_details[node_name] = head_node
         
+        # Add worker nodes
         if worker_details:
             for worker in worker_details:
                 worker_name = f"Worker {worker['number']} ({worker['name']})"
                 available_nodes.append(worker_name)
-            
+                # Create detailed info for worker
                 worker_info = {
                     "NodeID": worker.get('name', 'N/A'),
                     "Alive": True,
@@ -185,21 +207,23 @@ def cluster_tab():
                 }
                 node_details[worker_name] = worker_info
         else:
-            
+            # Fallback to Ray cluster nodes if API data not available
             for i, worker_node in enumerate(worker_nodes):
                 if worker_node.get("Alive"):
                     worker_name = f"Worker {i+1} (ray-worker-{i+1})"
                     available_nodes.append(worker_name)
                     node_details[worker_name] = worker_node
         
+        # Node selection dropdown
         selected_node = st.selectbox(
-            "Seleccionar un nodo para ver información:",
+            "Seleccionar nodo para ver información detallada:",
             available_nodes,
             help="Selecciona un nodo específico para ver su información completa"
         )
         
+        # Show detailed information based on selection
         if selected_node == "Información General del Clúster":
-            st.markdown("**Resumen General del Clúster:**")
+            st.markdown("**📊 Resumen General del Clúster:**")
             general_info = {
                 "Total de Nodos": len(cluster_status.get("node_details", [])),
                 "Nodos Activos": len([n for n in cluster_status.get("node_details", []) if n.get("Alive")]),
@@ -207,6 +231,7 @@ def cluster_tab():
                 "Estado del Clúster": "Activo" if cluster_status.get("node_details") else "Inactivo"
             }
             
+            # Display as metrics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Total Nodos", general_info["Total de Nodos"])
@@ -217,13 +242,16 @@ def cluster_tab():
             with col4:
                 st.metric("Estado", general_info["Estado del Clúster"])
             
+            # Show full cluster status in a more organized way
             st.markdown("**🔧 Configuración Completa del Clúster:**")
             st.json(cluster_status)
         else:
+            # Show specific node information
             if selected_node in node_details:
                 node_info = node_details[selected_node]
                 st.markdown(f"**📋 Información Detallada: {selected_node}**")
                 
+                # Show key metrics for the selected node
                 if "Resources" in node_info:
                     resources = node_info["Resources"]
                     col1, col2, col3 = st.columns(3)
@@ -246,14 +274,17 @@ def cluster_tab():
                         status = "✅ Activo" if node_info.get("Alive", False) else "❌ Inactivo"
                         st.metric("Estado", status)
                 
+                # Show complete node information in table format
                 st.markdown("**🔧 Información Completa del Nodo:**")
                 
+                # Convert node info to a more readable table format
                 def format_node_info_table(node_data):
-                    """Convertir la información del nodo a un formato de tabla estructurado"""
+                    """Convert node information to a structured table format"""
                     table_data = []
                     
                     def add_row(key, value, category="General"):
                         if isinstance(value, dict):
+                            # For nested dictionaries, add each key-value pair
                             for sub_key, sub_value in value.items():
                                 table_data.append({
                                     "Categoría": category,
@@ -261,6 +292,7 @@ def cluster_tab():
                                     "Valor": str(sub_value)
                                 })
                         elif isinstance(value, list):
+                            # For lists, join elements or show count
                             if len(value) > 0:
                                 table_data.append({
                                     "Categoría": category,
@@ -280,6 +312,7 @@ def cluster_tab():
                                 "Valor": str(value)
                             })
                     
+                    # Process each key in node_data
                     for key, value in node_data.items():
                         if key == "Resources":
                             add_row(key, value, "Recursos")
@@ -294,6 +327,7 @@ def cluster_tab():
                     
                     return table_data
                 
+                # Create and display the table
                 table_data = format_node_info_table(node_info)
                 if table_data:
                     df_node_info = pd.DataFrame(table_data)
@@ -307,22 +341,25 @@ def cluster_tab():
         st.warning(f"Clúster no disponible: {cluster_status['error']}")
         st.info("Esto puede ocurrir si Ray no está completamente inicializado.")
 
+# --- TRAINING TAB ---
 def training_tab():
     st.header("🏋🏻‍♀️ Entrenamiento distribuido de Modelos de Machine Learning.")
     st.markdown("Seleccione los datasets deseados en formato csv y json para realizar el procesamiento y entrenamiento distribuido de modelos de ML en el clúster de Ray.")
     
+    # Check for existing trained models (no longer shown in UI, but still fetched for prediction section)
     try:
         models_response = requests.get('http://localhost:8000/models', timeout=5)
         if models_response.status_code == 200:
             existing_models = models_response.json()
     except Exception:
-        pass  
+        pass  # If check fails, continue normally
     
+    # Show recent training results if available
     if st.session_state.get('last_training_results'):
         last_results = st.session_state['last_training_results']
         time_ago = int(time.time() - last_results['timestamp'])
         
-        if time_ago < 3600:  
+        if time_ago < 3600:  # Show if less than 1 hour ago
             minutes_ago = time_ago // 60
             with st.expander(f"📈 Resultados de Entrenamiento Recientes ({minutes_ago} minutos atrás)"):
                 result = last_results['results']
@@ -339,15 +376,17 @@ def training_tab():
                                 
                                 if accuracy is not None:
                                     try:
-                                        
+                                        # Ensure accuracy is a number before formatting
                                         accuracy_float = float(accuracy)
                                         st.write(f"  - {model_name}: {accuracy_float:.4f}")
                                     except (ValueError, TypeError):
-                                        
+                                        # If conversion fails, display as-is
                                         st.write(f"  - {model_name}: {accuracy}")
                                 else:
                                     st.write(f"  - {model_name}: Entrenamiento completado")
     
+    st.info("💡 Para realizar el entrenamiento primero suba el dataset deseado y luego seleccione la variable objetivo y los modelos a entrenar")
+
     uploaded_files = st.file_uploader(
         "Seleccione archivos csv o json para procesamiento distribuido:",
         type=['csv', 'json'],
@@ -359,7 +398,6 @@ def training_tab():
         files_to_process = [f for f in uploaded_files if f.name not in st.session_state['uploaded_files']]
         
         if not files_to_process and uploaded_files:
-            st.warning("⚠️ Los archivos ya están en la sesión pero pueden no haberse procesado correctamente.")
             if st.button("🔄 Forzar reprocesamiento de todos los archivos"):
                 for uploaded_file in uploaded_files:
                     if uploaded_file.name in st.session_state['uploaded_files']:
@@ -792,6 +830,7 @@ def prediction_tab():
                                     st.caption(f"Campo {i+1} de {num_features}")
                                 
                                 with col2:
+                                    # Use different input types based on feature name patterns
                                     if any(keyword in feature_name.lower() for keyword in ['age', 'year', 'count', 'number']):
                                         feature_inputs[feature_name] = st.number_input(
                                             f"Valor para {feature_name}",
@@ -821,18 +860,23 @@ def prediction_tab():
                                             help=f"Ingresa el valor para {feature_name}"
                                         )
                                 
+                                # Add some spacing between fields
                                 if i < len(input_features) - 1:
                                     st.markdown("")
                             
                             st.markdown("---")
                     
+                    # Prediction button with enhanced styling
                     col1, col2, col3 = st.columns([1, 2, 1])
                     with col2:
                         if st.button("🚀 Realizar Predicción", type="primary", use_container_width=True):
+                            # Prepare feature dict for prediction
                             try:
+                                # Enhanced feature processing
                                 features = {}
                                 for k, v in feature_inputs.items():
                                     if v != '' and v is not None:
+                                        # Try to convert to appropriate type
                                         if isinstance(v, (int, float)):
                                             features[k] = float(v)
                                         elif isinstance(v, str) and v.replace('.','',1).replace('-','',1).isdigit():
@@ -845,6 +889,7 @@ def prediction_tab():
                                 else:
                                     st.success(f"✅ Realizando predicción con {len(features)} características...")
                                     
+                                    # Show predictions for each selected model
                                     for model_name in selected_models:
                                         with st.container():
                                             st.markdown(f"### 🤖 Predicción del modelo: `{model_name}`")
@@ -865,9 +910,11 @@ def prediction_tab():
                                                 prediction = prediction_response.json()
                                                 pred_value = prediction.get('prediction', 'N/A')
                                                 
+                                                # Enhanced prediction display
                                                 if isinstance(pred_value, (int, float)):
                                                     pred_class = int(round(pred_value))
                                                     
+                                                    # Create a nice result display
                                                     col1, col2 = st.columns([1, 1])
                                                     with col1:
                                                         st.metric(
@@ -882,6 +929,7 @@ def prediction_tab():
                                                             help="Valor de confianza del modelo"
                                                         )
                                                     
+                                                    # Color-coded result
                                                     if pred_class == 1:
                                                         st.success(f"🎯 **Resultado: POSITIVO** (Clase {pred_class})")
                                                     else:
@@ -903,19 +951,20 @@ def prediction_tab():
         st.error(f"❌ Error conectando al backend: {e}")
 
 
-
 st.title("Plataforma distribuida de entrenamiento supervisado")
 
+# Single page layout - all sections in sequence
 cluster_tab()
 
-st.markdown("---") 
+st.markdown("---")  # Separator between sections
 
 training_tab()
 
-st.markdown("---") 
+st.markdown("---")  # Separator between sections
 
 prediction_tab()
 
+# Show backend status and clear memory button in sidebar
 st.sidebar.markdown("---")
 st.sidebar.subheader("Estado de la API (backend)")
 try:
@@ -927,6 +976,7 @@ try:
 except Exception:
     st.sidebar.error("❌ API no disponible")
 
+# Add clear memory button to sidebar
 st.sidebar.markdown("---")
 st.sidebar.subheader("Herramientas")
 if st.sidebar.button("🧹 Limpiar Memoria", help="Limpia toda la memoria y los modelos entrenados para evitar desbordamientos y empezar de cero.", use_container_width=True):
