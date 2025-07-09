@@ -1,15 +1,9 @@
-"""
-Main module for the distributed ML platform - API serving mode only
-Training is handled by the Streamlit interface
-"""
 import logging
 import ray
 import uvicorn
+from ray_cluster import initialize_ray    
+from api_fast import create_app           
 
-from ray_cluster import initialize_ray    # Importa desde ray_cluster.py
-from api_fast import create_app           # Importa desde api_fast.py
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -22,7 +16,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def get_model_names():
-    """Get available model names from Ray actors"""
     try:
         if ray.is_initialized():
             all_actors = ray.util.list_named_actors()
@@ -34,7 +27,6 @@ def get_model_names():
     return []
 
 def create_global_app():
-    """Create the global app instance for uvicorn"""
     if not ray.is_initialized():
         success = initialize_ray(address="ray-head:6379", local_mode=False)
         if success:
@@ -46,11 +38,9 @@ def create_global_app():
     app, predictor = create_app(model_names)
     return app
 
-# Global app instance for uvicorn
 app = create_global_app()
 
 def main():
-    """Main execution function for standalone serving"""
     logger.info("Starting API server in standalone mode")
     
     model_names = get_model_names()

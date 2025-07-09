@@ -186,13 +186,13 @@ def cluster_tab():
             st.json(cluster_status)
     
     else:
-        st.warning(f"⚠️ Estado del clúster no disponible: {cluster_status['error']}")
-        st.info("💡 Esto puede ocurrir si Ray no está completamente inicializado. Verifica los logs del contenedor.")
+        st.warning(f"Clúster no disponible: {cluster_status['error']}")
+        st.info("Esto puede ocurrir si Ray no está completamente inicializado.")
 
 # --- TRAINING TAB ---
 def training_tab():
-    st.header("🏋🏻‍♀️ Entrenamiento de Modelos de Machine Learning de forma distribuida.")
-    st.markdown("Seleccione los datasets deseados en formato CSV/JSON para realizar el procesamiento y entrenamiento distribuido de modelos de ML en el clúster de Ray.")
+    st.header("🏋🏻‍♀️ Entrenamiento distribuido de Modelos de Machine Learning.")
+    st.markdown("Seleccione los datasets deseados en formato csv y json para realizar el procesamiento y entrenamiento distribuido de modelos de ML en el clúster de Ray.")
     
     # Check for existing trained models (no longer shown in UI, but still fetched for prediction section)
     try:
@@ -217,7 +217,7 @@ def training_tab():
                         if dataset_result.get('status') == 'success' and 'results' in dataset_result:
                             st.write(f"**{dataset_name}:**")
                             for model_name, model_result in dataset_result['results'].items():
-                                # Show accuracy for classification models
+                            
                                 accuracy = model_result.get('accuracy')
                                 if accuracy is None:
                                     accuracy = model_result.get('metrics', {}).get('accuracy')
@@ -233,34 +233,34 @@ def training_tab():
                                 else:
                                     st.write(f"  - {model_name}: Entrenamiento completado")
     
-    st.info("💡 Para realizar el entrenamiento primero suba el dataset deseado y luego seleccione la variable objetivo...")
+    st.info("💡 Para realizar el entrenamiento primero suba el dataset deseado y luego seleccione la variable objetivo y los modelos a entrenar")
 
     # Add distributed memory clear button
-    if st.button("🧹 Limpiar Memoria Distribuida", help="Limpia toda la memoria distribuida y los modelos entrenados para evitar desbordamientos y empezar de cero."):
-        with st.spinner("Limpiando memoria distribuida y recursos del clúster..."):
+    if st.button("🧹 Limpiar Memoria", help="Limpia toda la memoria y los modelos entrenados para evitar desbordamientos y empezar de cero."):
+        with st.spinner("Limpiando memoria y recursos del clúster..."):
             try:
                 response = requests.post("http://localhost:8000/clear_memory", timeout=60)
                 if response.status_code == 200:
                     st.session_state['uploaded_files'] = {}
                     st.session_state['file_configs'] = {}
                     st.session_state['last_training_results'] = None
-                    st.success("✅ Memoria distribuida limpiada correctamente. Puedes subir nuevos archivos y entrenar modelos desde cero.")
+                    st.success("✅ Memoria limpiada correctamente. Puedes subir nuevos archivos y entrenar modelos desde cero.")
                     st.rerun()
                 else:
                     try:
                         error_msg = response.json().get('detail', response.text)
                     except Exception:
                         error_msg = response.text
-                    st.error(f"❌ Error al limpiar memoria distribuida: {error_msg}")
+                    st.error(f"❌ Error al limpiar memoria: {error_msg}")
             except Exception as e:
-                st.error(f"❌ Error de conexión al limpiar memoria distribuida: {e}")
+                st.error(f"❌ Error de conexión al limpiar memoria: {e}")
 
     # File uploader for multiple files
     uploaded_files = st.file_uploader(
-        "Seleccione archivos CSV o JSON para procesamiento distribuido:",
+        "Seleccione archivos csv o json para procesamiento distribuido:",
         type=['csv', 'json'],
         accept_multiple_files=True,
-        help="Seleccione uno o más archivos CSV/JSON para entrenar modelos de ML distribuido"
+        help="Seleccione uno o más archivos csv/json para entrenar distribuido modelos de ML"
     )
     
     if uploaded_files:
@@ -277,7 +277,7 @@ def training_tab():
         
         # Debug info
         if not files_to_process and uploaded_files:
-            st.warning("⚠️ Los archivos ya están en la sesi��n pero pueden no haberse procesado correctamente.")
+            st.warning("⚠️ Los archivos ya están en la sesión pero pueden no haberse procesado correctamente.")
             if st.button("🔄 Forzar reprocesamiento de todos los archivos"):
                 # Clear session state for these files
                 for uploaded_file in uploaded_files:
@@ -332,15 +332,15 @@ def training_tab():
                         
                         # Show specific error details
                         if response.status_code == 400:
-                            st.error(f"🔍 Detalle del error: {error_msg}")
-                            st.info("💡 Posibles causas: archivo corrupto, formato incorrecto, o problema con la codificación")
+                            st.error(f"Detalle del error: {error_msg}")
+                            st.info("Posibles causas: archivo corrupto, formato incorrecto, o problema con la codificación")
                         elif response.status_code == 403:
-                            st.error(f"🔍 Error de permisos (403): {error_msg}")
-                            st.info("💡 Posibles causas: problema de autenticación del backend, permisos de Ray, o configuración CORS")
-                            st.warning("🔧 Solución: Reinicie el backend con `docker-compose restart ray-head`")
+                            st.error(f"Error de permisos (403): {error_msg}")
+                            st.info("Posibles causas: problema de autenticación del backend, permisos de Ray, o configuración CORS")
+                            st.warning("Solución: Reinicie el backend con `docker-compose restart ray-head`")
                         elif response.status_code == 500:
-                            st.error(f"🔍 Error interno del servidor: {error_msg}")
-                            st.info("💡 Posible causa: problema en el procesamiento del backend")
+                            st.error(f"Error interno del servidor: {error_msg}")
+                            st.info("Posible causa: problema en el procesamiento del backend")
                         else:
                             st.error(f"🔍 Error: {error_msg}")
                         
@@ -348,19 +348,19 @@ def training_tab():
                         st.session_state['uploaded_files'][filename] = {"error": error_msg}
                         
                 except Exception as e:
-                    st.error(f"❌ Error de conexión procesando {filename}: {e}")
-                    st.info("💡 Verifique que el backend esté ejecutándose correctamente")
+                    st.error(f"Error de conexión procesando {filename}: {e}")
+                    st.info("Verifique que el backend esté ejecutándose correctamente")
                     # Store failed upload info to prevent showing configuration
                     st.session_state['uploaded_files'][filename] = {"error": str(e)}
             
             if uploaded_count > 0:
-                st.info(f"📤 {uploaded_count} archivo(s) distribuido(s) en el clúster Ray")
+                st.info(f"{uploaded_count} archivo(s) distribuido(s) en el clúster Ray")
                 st.success("🔄 Página actualizada. Los archivos están listos para configuración.")
             elif uploaded_count == 0 and files_to_process:
                 st.error("❌ Ningún archivo pudo ser procesado. Verifique los errores arriba.")
                 
                 # Add diagnostic information
-                with st.expander("🔧 Información de diagnóstico"):
+                with st.expander("Información de diagnóstico"):
                     st.write("**Estado del backend:**")
                     backend_status = check_backend_connectivity()
                     if backend_status["status"] == "connected":
@@ -381,11 +381,11 @@ def training_tab():
                     st.write("5. Si persiste, reconstruya: `docker-compose up --build -d`")
         else:
             # All files already processed
-            st.success("✅ Todos los archivos ya han sido procesados y están listos para configuración")
+            st.success("✅ Todos los archivos han sido procesados y están listos para configuración")
             if st.button("🔄 Actualizar vista", help="Refresca la interfaz para mostrar la sección de configuración"):
                 st.rerun()
     else:
-        st.info("💡 Seleccione archivos CSV o JSON para comenzar el procesamiento distribuido")
+        st.info("Seleccione el datasets deseado para comenzar el procesamiento")
     
     # Step 2: File Configuration and Training
     # Only show configuration if files are successfully uploaded and have valid data
@@ -431,7 +431,7 @@ def training_tab():
 
             # Show file preview by default
             if file_info.get('preview'):
-                st.markdown("**Vista previa del dataset:**")
+                st.markdown("**Resumen preliminar de los datos:**")
                 preview_df = pd.DataFrame(file_info['preview'])
                 st.dataframe(preview_df, use_container_width=True)
 
@@ -460,12 +460,12 @@ def training_tab():
             )
 
             # Algorithm selection - Only classification models
-            task_type = "classification"  # Fixed to classification only
-            algorithms = ["Decision Tree Classifier", "Logistic Regression", "Random Forest Classifier", "SVM Classifier", "K-Nearest Neighbors"]
+            task_type = "classification" 
+            algorithms = ["Decision Tree Classifier", "Logistic Regression", "Random Forest Classifier", "K-Nearest Neighbors"]
             selected_algorithms = st.multiselect(
                 "Seleccionar Modelos de Clasificación para Entrenar (puedes seleccionar múltiples)",
                 algorithms,
-                default=[algorithms[0]],  # Default to first algorithm
+                default=[algorithms[0]],  #Default to first algorithm
                 key=f"algos_{filename}",
                 help="Puedes seleccionar múltiples modelos de clasificación para entrenar y comparar su rendimiento. Estos modelos predicen categorías (0/1, clases discretas)"
             )
@@ -490,11 +490,11 @@ def training_tab():
             if selected_algorithms:
                 st.success(f"✅ {len(selected_algorithms)} modelo(s) configurado(s) para {filename}")
             else:
-                st.warning("⚠️ Por favor selecciona al menos un algoritmo")
+                st.warning("⚠️ Por favor selecciona al menos un modelo")
             st.markdown("---")  # Separator between datasets
         
         # Add single "Train All" button at the end
-        st.subheader("Entrenar Todos los Modelos seleccionados")
+        st.subheader("Entrenar todos los Modelos seleccionados")
         
         # Count total models across all datasets (only successfully uploaded ones)
         total_models = 0
@@ -519,7 +519,6 @@ def training_tab():
                                 "Decision Tree Classifier": "decision_tree_classifier",
                                 "Logistic Regression": "logistic_regression",
                                 "Random Forest Classifier": "random_forest_classifier",
-                                "SVM Classifier": "svm_classifier",
                                 "K-Nearest Neighbors": "k_nearest_neighbors"
                             }
                             return mapping.get(algo_name, algo_name.lower().replace(" ", "_"))
@@ -680,7 +679,7 @@ def training_tab():
                 4. Recarga esta página
                 """)
         else:
-            st.info("💡 Primero selecciona y procesa archivos CSV o JSON para continuar con la configuración de entrenamiento.")
+            st.info("Primero selecciona y procesa el datasets en formato csv o json para continuar con la configuración de entrenamiento.")
 
 # --- PREDICTION TAB ---
 def prediction_tab():
@@ -733,7 +732,7 @@ def prediction_tab():
             # Get available datasets (intersection with uploaded files)
             available_datasets = [filename_map[ds] for ds in dataset_to_models if ds in filename_map]
             if not available_datasets:
-                st.info("ℹ️ No hay datasets con modelos entrenados disponibles. Entrena algunos modelos primero en la sección de Entrenamiento.")
+                st.info("No hay datasets con modelos entrenados disponibles. Entrena algunos modelos primero en la sección de Entrenamiento.")
             else:
                 selected_dataset = st.selectbox("Selecciona un dataset:", available_datasets)
                 dataset_key = selected_dataset.replace('.csv','').replace('.json','')
@@ -761,14 +760,14 @@ def prediction_tab():
                     if dataset_info:
                         preview_columns = dataset_info.get('columns', [])
 
-                st.write(f"**Vista previa para {selected_dataset}:**")
+                st.write(f"**Resumen preliminar para {selected_dataset}:**")
                 if preview_data and preview_columns:
                     preview_df = pd.DataFrame(preview_data, columns=preview_columns)
                     st.dataframe(preview_df, use_container_width=True, hide_index=True)
                 elif preview_error:
-                    st.info(f"Vista previa no disponible: {preview_error}")
+                    st.info(f"Resumen preliminar no disponible: {preview_error}")
                 else:
-                    st.info("Vista previa no disponible para este dataset.")
+                    st.info("Resumen preliminar no disponible para este dataset.")
 
                 # Show models trained on this dataset
                 models_for_dataset = dataset_to_models.get(dataset_key, [])
@@ -882,10 +881,9 @@ def debug_section():
             cluster_status = get_cluster_status()
             st.json(cluster_status)
 
-# --- MAIN APP LAYOUT WITH TABS ---
+
 st.title("Plataforma distribuida de entrenamiento supervisado")
 
-# Create tabs
 tab1, tab2, tab3 = st.tabs(["🖧 Cluster", "🏋🏻‍♀️ Entrenamiento", "🚀 Predicción"])
 
 with tab1:
