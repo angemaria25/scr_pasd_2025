@@ -213,40 +213,7 @@ class ObjectStoreDataManager:
             logger.error(f"Error removing file {filename}: {e}")
             return False
     
-    def clear_all(self):
-        """Clear all stored files and force Ray object store cleanup"""
-        try:
-            files_count = len(self.file_registry)
-            
-            # Clear the registry first
-            self.file_registry.clear()
-            
-            # Force Ray garbage collection to clean up object store
-            try:
-                import gc
-                gc.collect()
-                
-                # Try to trigger Ray's internal garbage collection if available
-                try:
-                    import ray._private.internal_api
-                    ray._private.internal_api.free_objects_in_object_store_memory()
-                    logger.info("Triggered Ray object store garbage collection")
-                except Exception as gc_e:
-                    logger.warning(f"Could not trigger Ray GC: {gc_e}")
-                    
-            except Exception as gc_e:
-                logger.warning(f"Error during garbage collection: {gc_e}")
-            
-            logger.info(f"All {files_count} files cleared from object store registry")
-            return True
-        except Exception as e:
-            logger.error(f"Error clearing all files: {e}")
-            return False
     
-    def clear_all_data(self):
-        """Alias for clear_all for backward compatibility"""
-        return self.clear_all()
-
 
 # Global instance to be used by the API
 _data_manager = None
