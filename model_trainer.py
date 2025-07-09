@@ -55,14 +55,14 @@ def train_model(model, X_train, y_train, X_test, y_test, model_name=None):
         # Make predictions
         y_pred = model.predict(X_test)
         
-        # Calculate metrics - All models are now regression models
+        # Calculate metrics - Force classification metrics only
         metrics = {}
-        metrics['mse'] = mean_squared_error(y_test, y_pred)
-        metrics['rmse'] = np.sqrt(metrics['mse'])
         
-        # Add R² score for regression
-        from sklearn.metrics import r2_score
-        metrics['r2_score'] = r2_score(y_test, y_pred)
+        # Classification metrics
+        metrics['accuracy'] = accuracy_score(y_test, y_pred)
+        metrics['precision'] = precision_score(y_test, y_pred, average='weighted', zero_division=0)
+        metrics['recall'] = recall_score(y_test, y_pred, average='weighted', zero_division=0)
+        metrics['f1_score'] = f1_score(y_test, y_pred, average='weighted', zero_division=0)
             
         metrics['training_time'] = training_time
         
@@ -278,194 +278,80 @@ class ModelActor:
         }
         return info
 
-    def generate_roc_curve(self):
+    def generate_confusion_matrix_png(self):
         """
-        Generate ROC curve data for classification models.
+        Generate confusion matrix as PNG image (base64 encoded).
         
         Returns:
-            Dictionary with ROC curve data or error message
+            A dictionary containing the PNG image as base64 string.
         """
         try:
             if not self.training_data:
-                return {"error": "No training data available for ROC curve generation"}
+                return {"error": "No training data available for confusion matrix generation"}
             
+            import matplotlib.pyplot as plt
+            import seaborn as sns
+            from sklearn.metrics import confusion_matrix
             import numpy as np
-            from sklearn.metrics import roc_curve, auc
-            from sklearn.preprocessing import label_binarize
+            import base64
+            from io import BytesIO
             
             X_test = self.training_data['X_test']
             y_test = self.training_data['y_test']
             
-            # Check if it's a classification task
-            n_classes = len(np.unique(y_test))
-            if n_classes < 2:
-                return {"error": "ROC curve requires at least 2 classes"}
+            # Make predictions
+            y_pred = self.model.predict(X_test)
             
-            # Get prediction probabilities
-            if hasattr(self.model, 'predict_proba'):
-                y_proba = self.model.predict_proba(X_test)
-            elif hasattr(self.model, 'decision_function'):
-                y_scores = self.model.decision_function(X_test)
-                if n_classes == 2:
-                    # Binary classification
-                    y_proba = np.column_stack([1 - y_scores, y_scores])
-                else:
-                    return {"error": "Multi-class ROC with decision_function not supported"}
-            else:
-                return {"error": "Model does not support probability prediction"}
+            # Generate confusion matrix
+            cm = confusion_matrix(y_test, y_pred)
             
-            roc_data = {}
+            # Create the plot
+            plt.figure(figsize=(8, 6))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                        xticklabels=np.unique(y_test), 
+                        yticklabels=np.unique(y_test))
+            plt.title(f'Matriz de Confusión - {self.model_name}')
+            plt.xlabel('Predicción')
+            plt.ylabel('Valor Real')
             
-            if n_classes == 2:
-                # Binary classification
-                fpr, tpr, _ = roc_curve(y_test, y_proba[:, 1])
-                roc_auc = auc(fpr, tpr)
-                roc_data = {
-                    'fpr': fpr.tolist(),
-                    'tpr': tpr.tolist(),
-                    'auc': roc_auc,
-                    'type': 'binary'
-                }
-            else:
-                # Multi-class classification
-                y_test_bin = label_binarize(y_test, classes=np.unique(y_test))
-                roc_data = {'type': 'multiclass', 'classes': {}}
-                
-                for i in range(n_classes):
-                    fpr, tpr, _ = roc_curve(y_test_bin[:, i], y_proba[:, i])
-                    roc_auc = auc(fpr, tpr)
-                    roc_data['classes'][f'class_{i}'] = {
-                        'fpr': fpr.tolist(),
-                        'tpr': tpr.tolist(),
-                        'auc': roc_auc
-                    }
-            
-            return roc_data
-            
-        except Exception as e:
-            return {"error": f"Failed to generate ROC curve: {str(e)}"}
-
-    def generate_learning_curve(self):
-        """
-        Generate learning curve data.
-        
-        Returns:
-            Dictionary with learning curve data or error message
-        """
-        try:
-            if not self.training_data:
-                return {"error": "No training data available for learning curve generation"}
-            
-            from sklearn.model_selection import learning_curve
-            import numpy as np
-            
-            X_train = self.training_data['X_train']
-            y_train = self.training_data['y_train']
-            
-            # Generate learning curve
-            train_sizes = np.linspace(0.1, 1.0, 10)
-            train_sizes_abs, train_scores, val_scores = learning_curve(
-                self.model, X_train, y_train, 
-                train_sizes=train_sizes,
-                cv=3,  # 3-fold cross-validation
-                n_jobs=1,
-                random_state=42
-            )
-            
-            # Calculate mean and std
-            train_scores_mean = np.mean(train_scores, axis=1)
-            train_scores_std = np.std(train_scores, axis=1)
-            val_scores_mean = np.mean(val_scores, axis=1)
-            val_scores_std = np.std(val_scores, axis=1)
+            # Save to base64
+            buffer = BytesIO()
+            plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+            buffer.seek(0)
+            image_base64 = base64.b64encode(buffer.getvalue()).decode()
+            plt.close()
             
             return {
-                'train_sizes': train_sizes_abs.tolist(),
-                'train_scores_mean': train_scores_mean.tolist(),
-                'train_scores_std': train_scores_std.tolist(),
-                'val_scores_mean': val_scores_mean.tolist(),
-                'val_scores_std': val_scores_std.tolist()
+                'model_name': self.model_name,
+                'confusion_matrix_png': image_base64,
+                'format': 'png',
+                'encoding': 'base64'
             }
-            
         except Exception as e:
-            return {"error": f"Failed to generate learning curve: {str(e)}"}
+            return {'error': f'Failed to generate confusion matrix PNG: {str(e)}'}
 
     def generate_plot_data(self):
         """
-        Generate all plot data for the model (ROC curve and learning curve).
+        Generate all plot data for the model (confusion matrix for classification).
         
         Returns:
-            A dictionary containing both ROC curve and learning curve data, plus metrics.
+            A dictionary containing confusion matrix data, plus metrics.
         """
         return {
-            'roc_curve': self.generate_roc_curve(),
-            'learning_curve': self.generate_learning_curve(),
+            'confusion_matrix': self.generate_confusion_matrix_png(),
             'model_name': self.model_name,
             'metrics': self.metrics
         }
     
-    def generate_roc_png(self):
-        """
-        Generate ROC curve as PNG image (base64 encoded).
-        
-        Returns:
-            A dictionary containing the PNG image as base64 string.
-        """
-        try:
-            import sys
-            import os
-            sys.path.append('/app')
-            from src.visualization.visualizer import plot_roc_curve_to_png
-            
-            roc_data = self.generate_roc_curve()
-            if 'error' in roc_data:
-                return {'error': roc_data['error']}
-            
-            png_base64 = plot_roc_curve_to_png(roc_data, self.model_name, return_base64=True)
-            return {
-                'model_name': self.model_name,
-                'roc_curve_png': png_base64,
-                'format': 'png',
-                'encoding': 'base64'
-            }
-        except Exception as e:
-            return {'error': f'Failed to generate ROC curve PNG: {str(e)}'}
-    
-    def generate_learning_curve_png(self):
-        """
-        Generate learning curve as PNG image (base64 encoded).
-        
-        Returns:
-            A dictionary containing the PNG image as base64 string.
-        """
-        try:
-            import sys
-            import os
-            sys.path.append('/app')
-            from src.visualization.visualizer import plot_learning_curve_to_png
-            
-            learning_data = self.generate_learning_curve()
-            if 'error' in learning_data:
-                return {'error': learning_data['error']}
-            
-            png_base64 = plot_learning_curve_to_png(learning_data, self.model_name, return_base64=True)
-            return {
-                'model_name': self.model_name,
-                'learning_curve_png': png_base64,
-                'format': 'png',
-                'encoding': 'base64'
-            }
-        except Exception as e:
-            return {'error': f'Failed to generate learning curve PNG: {str(e)}'}
-    
+
     def generate_plots_png(self):
         """
-        Generate both ROC curve and learning curve as PNG images.
+        Generate confusion matrix as PNG image for classification models.
         
         Returns:
-            A dictionary containing both PNG images as base64 strings.
+            A dictionary containing the PNG image as base64 string.
         """
         return {
-            'roc_curve': self.generate_roc_png(),
-            'learning_curve': self.generate_learning_curve_png(),
+            'confusion_matrix': self.generate_confusion_matrix_png(),
             'model_name': self.model_name
         }

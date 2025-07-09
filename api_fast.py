@@ -212,6 +212,27 @@ def create_app(model_names):
         except Exception as e:
             raise HTTPException(status_code=404, detail=f"Model {model_name} not found: {str(e)}")
 
+    @app.get("/visualization/{model_name}/confusion_matrix")
+    async def get_confusion_matrix(model_name: str):
+        """Get confusion matrix as a viewable PNG image"""
+        try:
+            actor = ray.get_actor(model_name)
+            confusion_png_data = ray.get(actor.generate_confusion_matrix_png.remote())
+            
+            if 'error' in confusion_png_data:
+                raise HTTPException(status_code=500, detail=confusion_png_data['error'])
+            
+            # Decode base64 to binary PNG data
+            png_bytes = base64.b64decode(confusion_png_data['confusion_matrix_png'])
+            
+            return StreamingResponse(
+                io.BytesIO(png_bytes),
+                media_type="image/png",
+                headers={"Content-Disposition": f"inline; filename={model_name}_confusion_matrix.png"}
+            )
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"Model {model_name} not found: {str(e)}")
+
     # Prediction endpoints
     @app.post("/predict")
     async def predict_single(request: Dict[str, Any]):

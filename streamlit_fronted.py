@@ -63,7 +63,7 @@ def get_cluster_status():
 
 # --- CLUSTER MANAGEMENT TAB ---
 def cluster_tab():
-    st.header("🖧 Clúster de Ray")
+    st.header("🖧 Clúster Ray")
     
     # Add refresh button for cluster state
     col1, col2 = st.columns([3, 1])
@@ -90,7 +90,6 @@ def cluster_tab():
         st.session_state['last_worker_count'] = current_worker_count
     
     if "error" not in cluster_status:
-        st.subheader("Estado Actual del Clúster")
         
         # Get worker details from backend API
         workers_api_response = get_workers_from_api()
@@ -110,7 +109,7 @@ def cluster_tab():
                 st.warning(f"Could not fetch worker details (timeout or error): {e}")
         
         # Create comprehensive cluster table
-        st.markdown("### 🖧 Nodos")
+        st.markdown("#### 🖧 Nodos")
         
         # Prepare table data
         table_data = []
@@ -128,7 +127,7 @@ def cluster_tab():
         head_status = "✅ Activo" if head_node and head_node.get("Alive") else "❌ Inactivo"
         
         table_data.append({
-            "Nodo": "1️⃣ Head Node (ray-head)",
+            "Nodo": "Head Node (ray-head)",
             "CPU": f"{head_cpu}",
             "RAM (GB)": f"{head_memory:.1f}",
             "Estado": head_status,
@@ -153,7 +152,7 @@ def cluster_tab():
                 status_text = "Activo"
                 
                 table_data.append({
-                    "Nodo": f"⚙️ Worker {worker['number']} ({worker['name']})",
+                    "Nodo": f"Worker {worker['number']} ({worker['name']})",
                     "CPU": f"{worker_cpu}",
                     "RAM (GB)": f"{worker_memory:.1f}",
                     "Estado": f"{status_icon} {status_text}",
@@ -218,11 +217,10 @@ def training_tab():
                         if dataset_result.get('status') == 'success' and 'results' in dataset_result:
                             st.write(f"**{dataset_name}:**")
                             for model_name, model_result in dataset_result['results'].items():
+                                # Show accuracy for classification models
                                 accuracy = model_result.get('accuracy')
                                 if accuracy is None:
                                     accuracy = model_result.get('metrics', {}).get('accuracy')
-                                if accuracy is None:
-                                    accuracy = model_result.get('test_score')
                                 
                                 if accuracy is not None:
                                     try:
@@ -236,9 +234,6 @@ def training_tab():
                                     st.write(f"  - {model_name}: Entrenamiento completado")
     
     st.info("💡 Para realizar el entrenamiento primero suba el dataset deseado y luego seleccione la variable objetivo...")
-    
-    # Step 1: File Upload
-    st.subheader("1. 📁 Subir Archivos CSV/JSON")
 
     # Add distributed memory clear button
     if st.button("🧹 Limpiar Memoria Distribuida", help="Limpia toda la memoria distribuida y los modelos entrenados para evitar desbordamientos y empezar de cero."):
@@ -282,7 +277,7 @@ def training_tab():
         
         # Debug info
         if not files_to_process and uploaded_files:
-            st.warning("⚠️ Los archivos ya están en la sesión pero pueden no haberse procesado correctamente.")
+            st.warning("⚠️ Los archivos ya están en la sesi��n pero pueden no haberse procesado correctamente.")
             if st.button("🔄 Forzar reprocesamiento de todos los archivos"):
                 # Clear session state for these files
                 for uploaded_file in uploaded_files:
@@ -369,7 +364,7 @@ def training_tab():
                     st.write("**Estado del backend:**")
                     backend_status = check_backend_connectivity()
                     if backend_status["status"] == "connected":
-                        st.success("�� Backend accesible")
+                        st.success("✅ Backend accesible")
                     else:
                         st.error(f"❌ Problema con backend: {backend_status['message']}")
                     
@@ -429,14 +424,14 @@ def training_tab():
             pass  # If backend check fails, continue with cached session state
     
     if successfully_uploaded_files:
-        st.subheader("2. ⚙️ Configurar Parámetros de Entrenamiento")
+        
         for filename, file_info in successfully_uploaded_files.items():
             st.markdown(f"#### 📄 Configurar {filename}")
             st.caption(f"{file_info['rows']} filas, {len(file_info['columns'])} columnas")
 
             # Show file preview by default
             if file_info.get('preview'):
-                st.markdown("**👁️ Vista previa de los datos:**")
+                st.markdown("**Vista previa del dataset:**")
                 preview_df = pd.DataFrame(file_info['preview'])
                 st.dataframe(preview_df, use_container_width=True)
 
@@ -466,7 +461,7 @@ def training_tab():
 
             # Algorithm selection - Only classification models
             task_type = "classification"  # Fixed to classification only
-            algorithms = ["Decision Tree Classifier", "Gradient Boosting Classifier", "Logistic Regression", "Random Forest Classifier", "SVM Classifier", "K-Nearest Neighbors"]
+            algorithms = ["Decision Tree Classifier", "Logistic Regression", "Random Forest Classifier", "SVM Classifier", "K-Nearest Neighbors"]
             selected_algorithms = st.multiselect(
                 "Seleccionar Modelos de Clasificación para Entrenar (puedes seleccionar múltiples)",
                 algorithms,
@@ -476,12 +471,12 @@ def training_tab():
             )
 
             # Advanced parameters section (not nested in expander)
-            st.markdown("**⚙️ Parámetros Avanzados:**")
+            st.markdown("**Seleccione:**")
             col1, col2, col3 = st.columns(3)
             with col1:
                 test_size = st.slider("Tamaño del Test", 0.1, 0.5, 0.2, key=f"test_size_{filename}")
             with col2:
-                random_state = st.number_input("Random State", 1, 1000, 42, key=f"random_state_{filename}")
+                random_state = st.number_input("Random State (semilla)", 1, 1000, 42, key=f"random_state_{filename}")
 
             # Store configuration
             st.session_state['file_configs'][filename] = {
@@ -499,7 +494,7 @@ def training_tab():
             st.markdown("---")  # Separator between datasets
         
         # Add single "Train All" button at the end
-        st.subheader("3. 🚀 Entrenar Todos los Modelos")
+        st.subheader("Entrenar Todos los Modelos seleccionados")
         
         # Count total models across all datasets (only successfully uploaded ones)
         total_models = 0
@@ -511,9 +506,9 @@ def training_tab():
                 valid_configs += 1
         
         if total_models > 0:
-            st.info(f"📊 Listo para entrenar {total_models} modelo(s) en {valid_configs} dataset(s)")
+            st.info(f"Listo para entrenar {total_models} modelo(s) en {valid_configs} dataset(s)")
             
-            if st.button("🚀 Entrenar Todos los Modelos", type="primary", use_container_width=True):
+            if st.button("🚀 Comenzar entrenamiento de Modelos", type="primary", use_container_width=True):
                 with st.spinner(f"Entrenando {total_models} modelo(s) en {valid_configs} dataset(s)..."):
                     try:
                         # Create algorithm mapping function
@@ -522,7 +517,6 @@ def training_tab():
                             mapping = {
                                 # Classification algorithms
                                 "Decision Tree Classifier": "decision_tree_classifier",
-                                "Gradient Boosting Classifier": "gradient_boosting_classifier", 
                                 "Logistic Regression": "logistic_regression",
                                 "Random Forest Classifier": "random_forest_classifier",
                                 "SVM Classifier": "svm_classifier",
@@ -572,7 +566,7 @@ def training_tab():
                                     if dataset_result.get('status') == 'success' and 'results' in dataset_result:
                                         total_successful += len(dataset_result['results'])
                             
-                            st.success(f"✅ ¡Entrenamiento por lotes completado! {total_successful} modelo(s) entrenado(s) exitosamente!")
+                            st.success(f"✅ ¡Entrenamiento completado! {total_successful} modelo(s) entrenado(s) exitosamente!")
                             
                             # Show results for each dataset
                             if 'results' in result:
@@ -585,29 +579,30 @@ def training_tab():
                                             if 'results' in dataset_result:
                                                 for model_name, model_result in dataset_result['results'].items():
                                                     st.markdown(f"**{model_name}:**")
-                                                    # All models are classification models now
                                                     st.markdown(f"**{model_name}** (Modelo de Clasificación)")
                                                     
-                                                    # Display accuracy as primary metric
+                                                    # Display classification metrics
                                                     metrics = model_result.get('metrics', {})
+                                                    
+                                                    # Display accuracy as primary metric
                                                     accuracy = metrics.get('accuracy')
                                                     if accuracy is not None:
                                                         try:
                                                             accuracy_float = float(accuracy)
-                                                            st.info(f"🎯 Precisión: {accuracy_float:.4f}")
+                                                            st.info(f"🎯 Accuracy: {accuracy_float:.4f}")
                                                         except (ValueError, TypeError):
-                                                            st.info(f"🎯 Precisión: {accuracy}")
+                                                            st.info(f"🎯 Accuracy: {accuracy}")
                                                     else:
-                                                        st.warning("🎯 Precisión: No disponible")
+                                                        st.warning("🎯 Accuracy: No disponible")
                                                     
                                                     # Display other classification metrics
                                                     precision = metrics.get('precision')
                                                     if precision is not None:
                                                         try:
                                                             precision_float = float(precision)
-                                                            st.info(f"📊 Precisión: {precision_float:.4f}")
+                                                            st.info(f"📊 Precision: {precision_float:.4f}")
                                                         except (ValueError, TypeError):
-                                                            st.info(f"📊 Precisión: {precision}")
+                                                            st.info(f"📊 Precision: {precision}")
                                                     
                                                     recall = metrics.get('recall')
                                                     if recall is not None:
@@ -630,31 +625,18 @@ def training_tab():
                                                         st.markdown("**Métricas detalladas:**")
                                                         st.json(metrics)
 
-                                                    # Visualizations for classification
-                                                    col_viz1, col_viz2 = st.columns(2)
-                                                    with col_viz1:
-                                                        try:
-                                                            roc_response = requests.get(f'http://localhost:8000/visualization/{model_name}/roc_curve', timeout=60)
-                                                            content_type = roc_response.headers.get('content-type', '')
-                                                            content_len = len(roc_response.content)
-                                                            if roc_response.status_code == 200 and content_type.startswith('image') and content_len > 100:
-                                                                st.image(roc_response.content, caption=f"Curva ROC - {model_name}")
-                                                            else:
-                                                                st.warning("Curva ROC no disponible.")
-                                                        except Exception as e:
-                                                            st.warning(f"Error en curva ROC: {e}")
-                                                    
-                                                    with col_viz2:
-                                                        try:
-                                                            learning_response = requests.get(f'http://localhost:8000/visualization/{model_name}/learning_curve', timeout=60)
-                                                            content_type = learning_response.headers.get('content-type', '')
-                                                            content_len = len(learning_response.content)
-                                                            if learning_response.status_code == 200 and content_type.startswith('image') and content_len > 100:
-                                                                st.image(learning_response.content, caption=f"Curva de Aprendizaje - {model_name}")
-                                                            else:
-                                                                st.warning("Curva de aprendizaje no disponible.")
-                                                        except Exception as e:
-                                                            st.warning(f"Error en curva de aprendizaje: {e}")
+                                                    # Visualization: Confusion Matrix for classification
+                                                    st.markdown("**📊 Matriz de Confusión:**")
+                                                    try:
+                                                        confusion_response = requests.get(f'http://localhost:8000/visualization/{model_name}/confusion_matrix', timeout=60)
+                                                        content_type = confusion_response.headers.get('content-type', '')
+                                                        content_len = len(confusion_response.content)
+                                                        if confusion_response.status_code == 200 and content_type.startswith('image') and content_len > 100:
+                                                            st.image(confusion_response.content, caption=f"Matriz de Confusión - {model_name}")
+                                                        else:
+                                                            st.warning("Matriz de confusión no disponible.")
+                                                    except Exception as e:
+                                                        st.warning(f"Error en matriz de confusión: {e}")
                                         else:
                                             st.error(f"❌ Entrenamiento falló para {dataset_name}: {dataset_result.get('error', 'Error desconocido')}")
                         else:
@@ -702,7 +684,7 @@ def training_tab():
 
 # --- PREDICTION TAB ---
 def prediction_tab():
-    st.header("🚀 Predicciones con los modelos entrenados.")
+    st.header("🚀 Realiza Predicciones con los modelos entrenados.")
     # Get uploaded files and trained models
     try:
         files_response = requests.get('http://localhost:8000/uploaded_files', timeout=10)
@@ -822,7 +804,7 @@ def prediction_tab():
                                             f"{feature_name}", 
                                             key=f"predict_{feature_name}_{selected_dataset}"
                                         )
-                    if st.button("🚀 Predecir", use_container_width=True):
+                    if st.button("🚀 Comenzar Predección", use_container_width=True):
                         # Prepare feature dict for prediction
                         try:
                             features = {k: (float(v) if v.replace('.','',1).isdigit() else v) for k,v in feature_inputs.items() if v != ''}
