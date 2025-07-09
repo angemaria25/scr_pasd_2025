@@ -9,7 +9,7 @@ import time
 st.set_page_config(page_title="Plataforma distribuida de entrenamiento supervisado", layout="wide")
 
 def ensure_session_state():
-    """Initialize all session state variables to prevent KeyError crashes"""
+    """Inicializa todas las variables de estado de la sesión para prevenir errores de tipo KeyError."""
     defaults = {
         'cluster': {'head': {'cpu': 2, 'ram': 4, 'running': False}},
         'uploaded_files': {},
@@ -24,9 +24,8 @@ def ensure_session_state():
 # Initialize session state to prevent crashes
 ensure_session_state()
 
-# --- API STATUS ---
 def check_backend_connectivity():
-    """Check if backend is accessible and return status info"""
+    """Verifica si el backend es accesible y devuelve información del estado"""
     try:
         response = requests.get('http://localhost:8000/health', timeout=5)
         if response.status_code == 200:
@@ -41,7 +40,7 @@ def check_backend_connectivity():
         return {"status": "error", "message": f"Connection error: {str(e)}"}
 
 def get_workers_from_api():
-    """Get workers information directly from API"""
+    """Obtén información de los trabajadores directamente de la API"""
     try:
         response = requests.get('http://localhost:8000/cluster/workers', timeout=10)
         if response.status_code == 200:
@@ -51,7 +50,6 @@ def get_workers_from_api():
         return {"error": str(e), "success": False}
 
 def get_cluster_status():
-    """Get cluster status from backend API"""
     try:
         response = requests.get('http://localhost:8000/cluster/status', timeout=15)
         if response.status_code == 200:
@@ -60,17 +58,15 @@ def get_cluster_status():
     except Exception as e:
         return {"error": str(e)}
 
-# --- CLUSTER MANAGEMENT TAB ---
+
 def cluster_tab():
     st.header("🖧 Clúster Ray")
     
-    # Add refresh button for cluster state
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.write("")  # Empty space
+        st.write("") 
     with col2:
-        if st.button("🔄 Refrescar workers", help="Consulta la API para obtener el estado actual de todos los workers"):
-            # Force refresh by clearing any cached data and re-querying API
+        if st.button("Actualizar", help="Consulta la API para obtener el estado actual de todos los workers"):
             st.cache_data.clear()
             workers_info = get_workers_from_api()
             if workers_info.get("success"):
@@ -79,24 +75,19 @@ def cluster_tab():
                 st.error(f"❌ Error consultando workers: {workers_info.get('error', 'Unknown error')}")
             st.rerun()
     
-    # Get real cluster status from backend
     cluster_status = get_cluster_status()
     
-    # Detect changes in worker count
     if "error" not in cluster_status:
         nodes = cluster_status.get("node_details", [])
         current_worker_count = max(0, len(nodes) - 1) if nodes else 0
         st.session_state['last_worker_count'] = current_worker_count
     
     if "error" not in cluster_status:
-        
-        # Get worker details from backend API
         workers_api_response = get_workers_from_api()
         worker_details = []
         if workers_api_response.get("success"):
             worker_details = workers_api_response.get("workers", [])
         
-        # Also try the original endpoint as fallback
         if not worker_details:
             try:
                 workers_response = requests.get('http://localhost:8000/cluster/workers', timeout=15)
@@ -107,19 +98,15 @@ def cluster_tab():
             except Exception as e:
                 st.warning(f"Could not fetch worker details (timeout or error): {e}")
         
-        # Create comprehensive cluster table
         st.markdown("#### 🖧 Nodos")
         
-        # Prepare table data
         table_data = []
         
-        # Add head node
         nodes = cluster_status.get("node_details", [])
         head_node = None
         if nodes:
-            head_node = nodes[0]  # First node is typically the head
-        
-        # Use realistic CPU values instead of Ray's over-reported values
+            head_node = nodes[0] 
+            
         head_cpu_raw = head_node.get("Resources", {}).get("CPU", 2.0) if head_node else 2.0
         head_cpu = min(head_cpu_raw, 8)  # Cap at 8 cores for more realistic display
         head_memory = head_node.get("Resources", {}).get("memory", 4e9) / 1e9 if head_node else 4.0
@@ -133,15 +120,12 @@ def cluster_tab():
             "Tipo": "Líder"
         })
         
-        # Add worker nodes - use same logic as metrics (all Ray nodes except head)
-        worker_nodes = nodes[1:] if len(nodes) > 1 else []  # All nodes except head
+        worker_nodes = nodes[1:] if len(nodes) > 1 else []  
         
-        # Build worker table using API data
         if worker_details:
             for worker in worker_details:
-                # Get CPU and memory from worker resources
-                worker_cpu = 4  # Default
-                worker_memory = 2.0  # Default
+                worker_cpu = 4 
+                worker_memory = 2.0  
                 
                 if 'resources' in worker:
                     worker_cpu = min(worker['resources'].get('CPU', 4), 4)
@@ -158,7 +142,6 @@ def cluster_tab():
                     "Tipo": "Trabajador"
                 })
         else:
-            # Fallback: use Ray cluster info if API data not available
             for i, worker_node in enumerate(worker_nodes):
                 if worker_node.get("Alive"):
                     worker_cpu_raw = worker_node.get("Resources", {}).get("CPU", 2.0)
@@ -173,32 +156,27 @@ def cluster_tab():
                         "Tipo": "Trabajador"
                     })
         
-        # Display table with current worker count info
         if table_data:
             df = pd.DataFrame(table_data)
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.warning("No se pudo obtener información de los nodos del clúster")
         
-        # Node selection for detailed information
-        st.markdown("#### 🔍 Información Detallada de Nodos")
+        st.markdown("#### Información de los Nodos")
         
-        # Create list of available nodes for selection
         available_nodes = ["Información General del Clúster"]
         node_details = {}
-        
-        # Add head node
+    
         if head_node:
             node_name = "Head Node (ray-head)"
             available_nodes.append(node_name)
             node_details[node_name] = head_node
         
-        # Add worker nodes
         if worker_details:
             for worker in worker_details:
                 worker_name = f"Worker {worker['number']} ({worker['name']})"
                 available_nodes.append(worker_name)
-                # Create detailed info for worker
+            
                 worker_info = {
                     "NodeID": worker.get('name', 'N/A'),
                     "Alive": True,
@@ -207,23 +185,21 @@ def cluster_tab():
                 }
                 node_details[worker_name] = worker_info
         else:
-            # Fallback to Ray cluster nodes if API data not available
+            
             for i, worker_node in enumerate(worker_nodes):
                 if worker_node.get("Alive"):
                     worker_name = f"Worker {i+1} (ray-worker-{i+1})"
                     available_nodes.append(worker_name)
                     node_details[worker_name] = worker_node
         
-        # Node selection dropdown
         selected_node = st.selectbox(
-            "Seleccionar nodo para ver información detallada:",
+            "Seleccionar un nodo para ver información:",
             available_nodes,
             help="Selecciona un nodo específico para ver su información completa"
         )
         
-        # Show detailed information based on selection
         if selected_node == "Información General del Clúster":
-            st.markdown("**📊 Resumen General del Clúster:**")
+            st.markdown("**Resumen General del Clúster:**")
             general_info = {
                 "Total de Nodos": len(cluster_status.get("node_details", [])),
                 "Nodos Activos": len([n for n in cluster_status.get("node_details", []) if n.get("Alive")]),
@@ -231,7 +207,6 @@ def cluster_tab():
                 "Estado del Clúster": "Activo" if cluster_status.get("node_details") else "Inactivo"
             }
             
-            # Display as metrics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Total Nodos", general_info["Total de Nodos"])
@@ -242,16 +217,13 @@ def cluster_tab():
             with col4:
                 st.metric("Estado", general_info["Estado del Clúster"])
             
-            # Show full cluster status in a more organized way
             st.markdown("**🔧 Configuración Completa del Clúster:**")
             st.json(cluster_status)
         else:
-            # Show specific node information
             if selected_node in node_details:
                 node_info = node_details[selected_node]
                 st.markdown(f"**📋 Información Detallada: {selected_node}**")
                 
-                # Show key metrics for the selected node
                 if "Resources" in node_info:
                     resources = node_info["Resources"]
                     col1, col2, col3 = st.columns(3)
@@ -274,17 +246,14 @@ def cluster_tab():
                         status = "✅ Activo" if node_info.get("Alive", False) else "❌ Inactivo"
                         st.metric("Estado", status)
                 
-                # Show complete node information in table format
                 st.markdown("**🔧 Información Completa del Nodo:**")
                 
-                # Convert node info to a more readable table format
                 def format_node_info_table(node_data):
-                    """Convert node information to a structured table format"""
+                    """Convertir la información del nodo a un formato de tabla estructurado"""
                     table_data = []
                     
                     def add_row(key, value, category="General"):
                         if isinstance(value, dict):
-                            # For nested dictionaries, add each key-value pair
                             for sub_key, sub_value in value.items():
                                 table_data.append({
                                     "Categoría": category,
@@ -292,7 +261,6 @@ def cluster_tab():
                                     "Valor": str(sub_value)
                                 })
                         elif isinstance(value, list):
-                            # For lists, join elements or show count
                             if len(value) > 0:
                                 table_data.append({
                                     "Categoría": category,
@@ -312,7 +280,6 @@ def cluster_tab():
                                 "Valor": str(value)
                             })
                     
-                    # Process each key in node_data
                     for key, value in node_data.items():
                         if key == "Resources":
                             add_row(key, value, "Recursos")
@@ -327,7 +294,6 @@ def cluster_tab():
                     
                     return table_data
                 
-                # Create and display the table
                 table_data = format_node_info_table(node_info)
                 if table_data:
                     df_node_info = pd.DataFrame(table_data)
@@ -341,25 +307,22 @@ def cluster_tab():
         st.warning(f"Clúster no disponible: {cluster_status['error']}")
         st.info("Esto puede ocurrir si Ray no está completamente inicializado.")
 
-# --- TRAINING TAB ---
 def training_tab():
     st.header("🏋🏻‍♀️ Entrenamiento distribuido de Modelos de Machine Learning.")
     st.markdown("Seleccione los datasets deseados en formato csv y json para realizar el procesamiento y entrenamiento distribuido de modelos de ML en el clúster de Ray.")
     
-    # Check for existing trained models (no longer shown in UI, but still fetched for prediction section)
     try:
         models_response = requests.get('http://localhost:8000/models', timeout=5)
         if models_response.status_code == 200:
             existing_models = models_response.json()
     except Exception:
-        pass  # If check fails, continue normally
+        pass  
     
-    # Show recent training results if available
     if st.session_state.get('last_training_results'):
         last_results = st.session_state['last_training_results']
         time_ago = int(time.time() - last_results['timestamp'])
         
-        if time_ago < 3600:  # Show if less than 1 hour ago
+        if time_ago < 3600:  
             minutes_ago = time_ago // 60
             with st.expander(f"📈 Resultados de Entrenamiento Recientes ({minutes_ago} minutos atrás)"):
                 result = last_results['results']
@@ -376,18 +339,15 @@ def training_tab():
                                 
                                 if accuracy is not None:
                                     try:
-                                        # Ensure accuracy is a number before formatting
+                                        
                                         accuracy_float = float(accuracy)
                                         st.write(f"  - {model_name}: {accuracy_float:.4f}")
                                     except (ValueError, TypeError):
-                                        # If conversion fails, display as-is
+                                        
                                         st.write(f"  - {model_name}: {accuracy}")
                                 else:
                                     st.write(f"  - {model_name}: Entrenamiento completado")
     
-    st.info("💡 Para realizar el entrenamiento primero suba el dataset deseado y luego seleccione la variable objetivo y los modelos a entrenar")
-
-    # File uploader for multiple files
     uploaded_files = st.file_uploader(
         "Seleccione archivos csv o json para procesamiento distribuido:",
         type=['csv', 'json'],
@@ -396,45 +356,30 @@ def training_tab():
     )
     
     if uploaded_files:
-        st.success(f"📊 {len(uploaded_files)} archivo(s) seleccionado(s)")
-        
-        # Display uploaded files info
-        st.write("**Archivos seleccionados:**")
-        for uploaded_file in uploaded_files:
-            file_size = len(uploaded_file.getvalue()) / (1024 * 1024)  # Size in MB
-            st.write(f"- {uploaded_file.name} ({file_size:.2f} MB)")
-        
-        # Auto-process files if not already processed
         files_to_process = [f for f in uploaded_files if f.name not in st.session_state['uploaded_files']]
         
-        # Debug info
         if not files_to_process and uploaded_files:
             st.warning("⚠️ Los archivos ya están en la sesión pero pueden no haberse procesado correctamente.")
             if st.button("🔄 Forzar reprocesamiento de todos los archivos"):
-                # Clear session state for these files
                 for uploaded_file in uploaded_files:
                     if uploaded_file.name in st.session_state['uploaded_files']:
                         del st.session_state['uploaded_files'][uploaded_file.name]
                 st.rerun()
         
         if files_to_process:
-            # Process and upload files to backend automatically
             st.info(f"🔄 {len(files_to_process)} archivo(s) nuevo(s) detectado(s). Procesando automáticamente...")
             uploaded_count = 0
             
             for i, uploaded_file in enumerate(files_to_process):
                 filename = uploaded_file.name
                 
-                # Add delay between requests to prevent API overload
                 if i > 0:
                     time.sleep(0.5)
                 
                 try:
-                    # Read file content
                     file_content = uploaded_file.getvalue()
                     encoded_content = base64.b64encode(file_content).decode('utf-8')
                     
-                    # Upload to backend
                     upload_request = {
                         "filename": filename,
                         "content": encoded_content
@@ -453,7 +398,6 @@ def training_tab():
                         uploaded_count += 1
                         st.success(f"✅ {filename} procesado y distribuido ({upload_result.get('rows', 'N/A')} filas)")
                     else:
-                        # Get detailed error information
                         try:
                             error_details = response.json()
                             error_msg = error_details.get('detail', response.text)
@@ -461,28 +405,11 @@ def training_tab():
                             error_msg = response.text
                         
                         st.error(f"❌ Error procesando {filename} (Código {response.status_code})")
-                        
-                        # Show specific error details
-                        if response.status_code == 400:
-                            st.error(f"Detalle del error: {error_msg}")
-                            st.info("Posibles causas: archivo corrupto, formato incorrecto, o problema con la codificación")
-                        elif response.status_code == 403:
-                            st.error(f"Error de permisos (403): {error_msg}")
-                            st.info("Posibles causas: problema de autenticación del backend, permisos de Ray, o configuración CORS")
-                            st.warning("Solución: Reinicie el backend con `docker-compose restart ray-head`")
-                        elif response.status_code == 500:
-                            st.error(f"Error interno del servidor: {error_msg}")
-                            st.info("Posible causa: problema en el procesamiento del backend")
-                        else:
-                            st.error(f"🔍 Error: {error_msg}")
-                        
-                        # Store failed upload info to prevent showing configuration
+                                        
                         st.session_state['uploaded_files'][filename] = {"error": error_msg}
                         
                 except Exception as e:
                     st.error(f"Error de conexión procesando {filename}: {e}")
-                    st.info("Verifique que el backend esté ejecutándose correctamente")
-                    # Store failed upload info to prevent showing configuration
                     st.session_state['uploaded_files'][filename] = {"error": str(e)}
             
             if uploaded_count > 0:
@@ -491,7 +418,6 @@ def training_tab():
             elif uploaded_count == 0 and files_to_process:
                 st.error("❌ Ningún archivo pudo ser procesado. Verifique los errores arriba.")
                 
-                # Add diagnostic information
                 with st.expander("Información de diagnóstico"):
                     st.write("**Estado del backend:**")
                     backend_status = check_backend_connectivity()
@@ -504,27 +430,16 @@ def training_tab():
                     for file in files_to_process:
                         file_size = len(file.getvalue()) / (1024 * 1024)
                         st.write(f"- {file.name}: {file_size:.2f} MB")
-                        
-                    st.write("**Posibles soluciones:**")
-                    st.write("1. **Para errores 403**: Reinicie el backend: `docker-compose restart ray-head`")
-                    st.write("2. **Para errores 400**: Verifique que los archivos CSV tengan formato correcto")
-                    st.write("3. Asegúrese que los archivos no estén corruptos")
-                    st.write("4. Verifique que el backend esté funcionando: `docker-compose logs ray-head`")
-                    st.write("5. Si persiste, reconstruya: `docker-compose up --build -d`")
         else:
-            # All files already processed
             st.success("✅ Todos los archivos han sido procesados y están listos para configuración")
-            if st.button("🔄 Actualizar vista", help="Refresca la interfaz para mostrar la sección de configuración"):
-                st.rerun()
     else:
         st.info("Seleccione el datasets deseado para comenzar el procesamiento")
     
-    # Step 2: File Configuration and Training
-    # Only show configuration if files are successfully uploaded and have valid data
+    #Configuración de entrenamiento de archivos
+    #Solo mostrar configuración si los archivos se han subido correctamente y tienen datos válidos
     successfully_uploaded_files = {k: v for k, v in st.session_state['uploaded_files'].items() 
                                     if v and 'rows' in v and 'columns' in v}
-    
-    # Verify that uploaded files are still accessible in the backend
+
     if successfully_uploaded_files:
         try:
             response = requests.get('http://localhost:8000/uploaded_files', timeout=5)
@@ -532,42 +447,37 @@ def training_tab():
                 backend_response = response.json()
                 backend_files = backend_response.get('files', [])
                 
-                # Only check for missing files if the backend returned a valid response
                 if isinstance(backend_files, list):
                     missing_files = [f for f in successfully_uploaded_files.keys() if f not in backend_files]
                     if missing_files and len(backend_files) == 0:
-                        # Only warn if ALL files are missing (indicating cluster restart)
                         st.warning(f"⚠️ Detectado que el clúster Ray se reinició. Los archivos necesitan ser vueltos a subir.")
-                        # Clear missing files from session state
                         for missing_file in missing_files:
                             if missing_file in st.session_state['uploaded_files']:
                                 del st.session_state['uploaded_files'][missing_file]
                             if missing_file in st.session_state['file_configs']:
                                 del st.session_state['file_configs'][missing_file]
-                        # Update the list of successfully uploaded files
+                        
                         successfully_uploaded_files = {k: v for k, v in st.session_state['uploaded_files'].items() 
                                                         if v and 'rows' in v and 'columns' in v}
                         if not successfully_uploaded_files:
                             st.info("💡 Por favor, vuelve a subir los archivos.")
                     elif missing_files:
-                        # Some files missing but not all - show info message
+                
                         st.info(f"Algunos archivos ({missing_files}) no están disponibles en el backend. Esto puede ocurrir si se han agregado/eliminado workers o si el clúster se ha reconfigurado. Si persisten los problemas, vuelve a subir los archivos.")
         except Exception:
-            pass  # If backend check fails, continue with cached session state
+            pass  
     
     if successfully_uploaded_files:
         
         for filename, file_info in successfully_uploaded_files.items():
-            st.markdown(f"#### 📄 Configurar {filename}")
+            st.markdown(f"#### Configurar el dataset {filename} para entrenamiento.")
             st.caption(f"{file_info['rows']} filas, {len(file_info['columns'])} columnas")
 
-            # Show file preview by default
             if file_info.get('preview'):
                 st.markdown("**Resumen preliminar de los datos:**")
                 preview_df = pd.DataFrame(file_info['preview'])
                 st.dataframe(preview_df, use_container_width=True)
 
-            # Smart target column detection
             default_target = "target"
             if "target" in file_info['columns']:
                 default_target = "target"
@@ -578,7 +488,6 @@ def training_tab():
             elif any("y" == col.lower() for col in file_info['columns']):
                 default_target = next(col for col in file_info['columns'] if col.lower() == "y")
             
-            # Target column selection with smart default
             try:
                 default_index = file_info['columns'].index(default_target)
             except ValueError:
@@ -591,18 +500,16 @@ def training_tab():
                 help=f"La columna a predecir. Usualmente llamada 'target', 'price', 'value', o 'y'"
             )
 
-            # Algorithm selection - Only classification models
             task_type = "classification" 
             algorithms = ["Decision Tree Classifier", "Logistic Regression", "Random Forest Classifier", "K-Nearest Neighbors"]
             selected_algorithms = st.multiselect(
                 "Seleccionar Modelos de Clasificación para Entrenar (puedes seleccionar múltiples)",
                 algorithms,
-                default=[algorithms[0]],  #Default to first algorithm
+                default=[algorithms[0]], 
                 key=f"algos_{filename}",
                 help="Puedes seleccionar múltiples modelos de clasificación para entrenar y comparar su rendimiento. Estos modelos predicen categorías (0/1, clases discretas)"
             )
 
-            # Advanced parameters section (not nested in expander)
             st.markdown("**Seleccione:**")
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -610,7 +517,6 @@ def training_tab():
             with col2:
                 random_state = st.number_input("Random State (semilla)", 1, 1000, 42, key=f"random_state_{filename}")
 
-            # Store configuration
             st.session_state['file_configs'][filename] = {
                 'task_type': task_type,
                 'target_column': target_column,
@@ -618,17 +524,15 @@ def training_tab():
                 'test_size': test_size,
                 'random_state': random_state
             }
-            # Show current configuration status
+        
             if selected_algorithms:
                 st.success(f"✅ {len(selected_algorithms)} modelo(s) configurado(s) para {filename}")
             else:
                 st.warning("⚠️ Por favor selecciona al menos un modelo")
-            st.markdown("---")  # Separator between datasets
+            st.markdown("---") 
         
-        # Add single "Train All" button at the end
         st.subheader("Entrenar todos los Modelos seleccionados")
         
-        # Count total models across all datasets (only successfully uploaded ones)
         total_models = 0
         valid_configs = 0
         
@@ -643,11 +547,9 @@ def training_tab():
             if st.button("🚀 Comenzar entrenamiento de Modelos", type="primary", use_container_width=True):
                 with st.spinner(f"Entrenando {total_models} modelo(s) en {valid_configs} dataset(s)..."):
                     try:
-                        # Create algorithm mapping function
                         def convert_algorithm_name(algo_name, task_type):
                             """Convert display name to API name"""
                             mapping = {
-                                # Classification algorithms
                                 "Decision Tree Classifier": "decision_tree_classifier",
                                 "Logistic Regression": "logistic_regression",
                                 "Random Forest Classifier": "random_forest_classifier",
@@ -655,12 +557,10 @@ def training_tab():
                             }
                             return mapping.get(algo_name, algo_name.lower().replace(" ", "_"))
                         
-                        # Prepare batch training request (only for successfully uploaded files)
                         datasets_config = {}
                         
                         for filename, config in st.session_state['file_configs'].items():
                             if filename in successfully_uploaded_files and config.get('algorithms'):
-                                # Convert algorithm names to API format
                                 api_algorithms = [
                                     convert_algorithm_name(algo, config['task_type']) 
                                     for algo in config['algorithms']
@@ -674,23 +574,20 @@ def training_tab():
                                     "random_state": config['random_state']
                                 }
                         
-                        # Send batch training request
                         response = requests.post(
                             "http://localhost:8000/train_all_datasets",
                             json={"datasets": datasets_config},
-                            timeout=1200  # 20 minutes timeout for batch training
+                            timeout=1200  
                         )
                         
                         if response.status_code == 200:
                             result = response.json()
                             
-                            # Store training results in session state
                             st.session_state['last_training_results'] = {
                                 'timestamp': time.time(),
                                 'results': result
                             }
                             
-                            # Count actual successful models
                             total_successful = 0
                             if 'results' in result:
                                 for dataset_result in result['results'].values():
@@ -699,23 +596,20 @@ def training_tab():
                             
                             st.success(f"✅ ¡Entrenamiento completado! {total_successful} modelo(s) entrenado(s) exitosamente!")
                             
-                            # Show results for each dataset
                             if 'results' in result:
                                 for dataset_name, dataset_result in result['results'].items():
                                     with st.expander(f"📊 Resultados para {dataset_name}"):
                                         if dataset_result.get('status') == 'success':
                                             models_count = len(dataset_result.get('results', {}))
                                             st.success(f"✅ {models_count} modelo(s) entrenado(s) exitosamente")
-                                            # Show results for each model in this dataset
+                                    
                                             if 'results' in dataset_result:
                                                 for model_name, model_result in dataset_result['results'].items():
                                                     st.markdown(f"**{model_name}:**")
                                                     st.markdown(f"**{model_name}** (Modelo de Clasificación)")
                                                     
-                                                    # Display classification metrics
                                                     metrics = model_result.get('metrics', {})
                                                     
-                                                    # Display accuracy as primary metric
                                                     accuracy = metrics.get('accuracy')
                                                     if accuracy is not None:
                                                         try:
@@ -726,7 +620,6 @@ def training_tab():
                                                     else:
                                                         st.warning("🎯 Accuracy: No disponible")
                                                     
-                                                    # Display other classification metrics
                                                     precision = metrics.get('precision')
                                                     if precision is not None:
                                                         try:
@@ -751,12 +644,10 @@ def training_tab():
                                                         except (ValueError, TypeError):
                                                             st.info(f"🔄 F1-Score: {f1}")
 
-                                                    # Show additional metrics if available
                                                     if metrics:
                                                         st.markdown("**Métricas detalladas:**")
                                                         st.json(metrics)
-
-                                                    # Visualization: Confusion Matrix for classification
+                                                        
                                                     st.markdown("**📊 Matriz de Confusión:**")
                                                     try:
                                                         confusion_response = requests.get(f'http://localhost:8000/visualization/{model_name}/confusion_matrix', timeout=60)
@@ -776,7 +667,6 @@ def training_tab():
                     except Exception as e:
                         st.error(f"❌ Error durante el entrenamiento por lotes: {e}")
                         
-                        # Additional error handling: check if cluster is healthy
                         cluster_status = get_cluster_status()
                         if "error" in cluster_status:
                             st.error("❌ El clúster Ray no está disponible. Verifica que los contenedores estén ejecutándose.")
@@ -786,50 +676,31 @@ def training_tab():
         else:
             st.warning("⚠️ Por favor configura y selecciona algoritmos para al menos un dataset antes del entrenamiento")
     else:
-        # No successfully uploaded files
         if st.session_state['uploaded_files']:
             st.error("❌ Los archivos seleccionados no se han podido procesar correctamente.")
             
-            # Check backend connectivity and provide troubleshooting info
             backend_status = check_backend_connectivity()
             
             if backend_status["status"] == "connected":
                 st.info("✅ El backend está funcionando. El problema puede estar en el formato de los archivos o en el procesamiento.")
-                st.markdown("""
-                **Posibles soluciones:**
-                - Verifica que los archivos CSV tengan el formato correcto (con encabezados)
-                - Asegúrate que los archivos JSON tengan estructura de array de objetos
-                - Revisa los logs del backend para más detalles: `docker-compose logs backend`
-                """)
             else:
                 st.error(f"❌ Problema de conectividad: {backend_status['message']}")
-                st.markdown("""
-                **Para solucionar el problema:**
-                1. Asegúrate que Docker esté ejecutándose
-                2. Ejecuta: `docker-compose up -d` en la carpeta del proyecto
-                3. Espera unos segundos para que los contenedores se inicien completamente
-                4. Recarga esta página
-                """)
         else:
             st.info("Primero selecciona y procesa el datasets en formato csv o json para continuar con la configuración de entrenamiento.")
 
-# --- PREDICTION TAB ---
 def prediction_tab():
     st.header("🚀 Realiza Predicciones con los modelos entrenados.")
-    # Get uploaded files and trained models
     try:
         files_response = requests.get('http://localhost:8000/uploaded_files', timeout=10)
         models_response = requests.get('http://localhost:8000/models', timeout=10)
         if files_response.status_code == 200 and models_response.status_code == 200:
             files_data = files_response.json()
             models_data = models_response.json()
-            # Build dataset-to-model mapping (robust: match dataset part to uploaded file base name)
             dataset_to_models = {}
             model_to_features = {}
-            # Build a set of uploaded file base names (no extension)
             uploaded_files_list = files_data.get('uploaded_files', [])
             uploaded_basenames = set()
-            filename_map = {}  # base name -> full filename
+            filename_map = {} 
             for f in uploaded_files_list:
                 base = f['filename'].replace('.csv','').replace('.json','')
                 uploaded_basenames.add(base)
@@ -839,37 +710,34 @@ def prediction_tab():
                 model_name = model.get('name') or model.get('model_id') or model.get('model_name')
                 if not model_name:
                     continue
-                # Try to extract dataset part: match from rightmost underscore, but check if it matches any uploaded base name
                 parts = model_name.split('_')
                 matched_dataset = None
-                # Try all possible suffixes (from rightmost underscore to left)
                 for i in range(1, len(parts)):
                     candidate = '_'.join(parts[i:])
                     if candidate in uploaded_basenames:
                         matched_dataset = candidate
                         break
-                # If not found, try last part
+
                 if not matched_dataset and len(parts) > 1 and parts[-1] in uploaded_basenames:
                     matched_dataset = parts[-1]
-                # If still not found, try full model name (for legacy)
+                
                 if not matched_dataset and model_name in uploaded_basenames:
                     matched_dataset = model_name
-                # If still not found, skip (model not mapped to any uploaded dataset)
+                
                 if not matched_dataset:
                     continue
                 dataset_to_models.setdefault(matched_dataset, []).append(model_name)
                 if 'features' in model:
                     model_to_features[model_name] = model['features']
 
-            # Get available datasets (intersection with uploaded files)
+    
             available_datasets = [filename_map[ds] for ds in dataset_to_models if ds in filename_map]
             if not available_datasets:
                 st.info("No hay datasets con modelos entrenados disponibles. Entrena algunos modelos primero en la sección de Entrenamiento.")
             else:
                 selected_dataset = st.selectbox("Selecciona un dataset:", available_datasets)
                 dataset_key = selected_dataset.replace('.csv','').replace('.json','')
-                # --- Robust preview: fetch from backend preview endpoint ---
-
+                
                 preview_data = None
                 preview_columns = None
                 preview_error = None
@@ -886,7 +754,6 @@ def prediction_tab():
                 except Exception as e:
                     preview_error = f"Error obteniendo vista previa: {e}"
 
-                # Always try to get columns from uploaded_files if not set
                 if not preview_columns:
                     dataset_info = next((f for f in files_data.get('uploaded_files', []) if f['filename'] == selected_dataset), None)
                     if dataset_info:
@@ -901,72 +768,135 @@ def prediction_tab():
                 else:
                     st.info("Resumen preliminar no disponible para este dataset.")
 
-                # Show models trained on this dataset
                 models_for_dataset = dataset_to_models.get(dataset_key, [])
                 if not models_for_dataset:
                     st.warning("No hay modelos entrenados en este dataset.")
                 else:
                     selected_models = st.multiselect("Selecciona modelo(s) para usar en la predicción:", models_for_dataset, default=models_for_dataset[:1])
-                    # Feature input UI (organized in max 3 columns)
-                    st.markdown("**Ingresa valores de características para la predicción:**")
-                    # Build list of features (skip target)
-                    # Use preview_columns if available, else fallback to dataset_info columns
+                    
+                    st.markdown("**📝 Formulario de Predicción:**")
+                    st.markdown("Completa los siguientes campos para realizar la predicción:")
+                    
                     input_features = [col for col in (preview_columns if preview_columns else []) if col.lower() != 'target']
                     feature_inputs = {}
                     
-                    # Organize features in max 3 columns
-                    max_cols = 3
-                    num_features = len(input_features)
-                    if num_features > 0:
-                        # Calculate number of rows needed
-                        rows_needed = (num_features + max_cols - 1) // max_cols
-                        
-                        for row in range(rows_needed):
-                            # Create columns for this row
-                            cols_in_row = min(max_cols, num_features - row * max_cols)
-                            cols = st.columns(cols_in_row)
+                    if num_features := len(input_features):
+                        with st.container():
+                            st.markdown("---")
                             
-                            for col_idx in range(cols_in_row):
-                                feature_idx = row * max_cols + col_idx
-                                if feature_idx < num_features:
-                                    feature_name = input_features[feature_idx]
-                                    with cols[col_idx]:
-                                        feature_inputs[feature_name] = st.text_input(
-                                            f"{feature_name}", 
-                                            key=f"predict_{feature_name}_{selected_dataset}"
+                            for i, feature_name in enumerate(input_features):
+                                col1, col2 = st.columns([1, 2])
+                                
+                                with col1:
+                                    st.markdown(f"**{feature_name}:**")
+                                    st.caption(f"Campo {i+1} de {num_features}")
+                                
+                                with col2:
+                                    if any(keyword in feature_name.lower() for keyword in ['age', 'year', 'count', 'number']):
+                                        feature_inputs[feature_name] = st.number_input(
+                                            f"Valor para {feature_name}",
+                                            key=f"predict_{feature_name}_{selected_dataset}",
+                                            help=f"Ingresa un valor numérico para {feature_name}"
                                         )
-                    if st.button("🚀 Comenzar Predección", use_container_width=True):
-                        # Prepare feature dict for prediction
-                        try:
-                            features = {k: (float(v) if v.replace('.','',1).isdigit() else v) for k,v in feature_inputs.items() if v != ''}
-                            if not features:
-                                st.warning("Por favor ingresa valores para al menos una característica.")
-                            else:
-                                # Show predictions for each selected model
-                                for model_name in selected_models:
-                                    prediction_request = {
-                                        "model_name": model_name,
-                                        "features": features
-                                    }
-                                    prediction_response = requests.post(
-                                        'http://localhost:8000/predict',
-                                        json=prediction_request,
-                                        timeout=30
-                                    )
-                                    if prediction_response.status_code == 200:
-                                        prediction = prediction_response.json()
-                                        pred_value = prediction.get('prediction', 'N/A')
-                                        
-                                        # Format prediction for classification (should be 0 or 1)
-                                        if isinstance(pred_value, (int, float)):
-                                            pred_class = int(round(pred_value))
-                                            st.success(f"Modelo `{model_name}` predicción: **{pred_class}** (Clasificación)")
-                                        else:
-                                            st.success(f"Modelo `{model_name}` predicción: **{pred_value}**")
+                                    elif any(keyword in feature_name.lower() for keyword in ['price', 'cost', 'amount', 'salary', 'income']):
+                                        feature_inputs[feature_name] = st.number_input(
+                                            f"Valor para {feature_name}",
+                                            min_value=0.0,
+                                            key=f"predict_{feature_name}_{selected_dataset}",
+                                            help=f"Ingresa un valor monetario para {feature_name}"
+                                        )
+                                    elif any(keyword in feature_name.lower() for keyword in ['rate', 'ratio', 'percentage', 'score']):
+                                        feature_inputs[feature_name] = st.slider(
+                                            f"Valor para {feature_name}",
+                                            min_value=0.0,
+                                            max_value=100.0,
+                                            value=50.0,
+                                            key=f"predict_{feature_name}_{selected_dataset}",
+                                            help=f"Selecciona un valor entre 0 y 100 para {feature_name}"
+                                        )
                                     else:
-                                        st.error(f"Predicción falló para `{model_name}`: {prediction_response.text}")
-                        except Exception as e:
-                            st.error(f"Error en predicción: {e}")
+                                        feature_inputs[feature_name] = st.text_input(
+                                            f"Valor para {feature_name}",
+                                            key=f"predict_{feature_name}_{selected_dataset}",
+                                            help=f"Ingresa el valor para {feature_name}"
+                                        )
+                                
+                                if i < len(input_features) - 1:
+                                    st.markdown("")
+                            
+                            st.markdown("---")
+                    
+                    col1, col2, col3 = st.columns([1, 2, 1])
+                    with col2:
+                        if st.button("🚀 Realizar Predicción", type="primary", use_container_width=True):
+                            try:
+                                features = {}
+                                for k, v in feature_inputs.items():
+                                    if v != '' and v is not None:
+                                        if isinstance(v, (int, float)):
+                                            features[k] = float(v)
+                                        elif isinstance(v, str) and v.replace('.','',1).replace('-','',1).isdigit():
+                                            features[k] = float(v)
+                                        else:
+                                            features[k] = v
+                                
+                                if not features:
+                                    st.warning("⚠️ Por favor completa al menos un campo para realizar la predicción.")
+                                else:
+                                    st.success(f"✅ Realizando predicción con {len(features)} características...")
+                                    
+                                    for model_name in selected_models:
+                                        with st.container():
+                                            st.markdown(f"### 🤖 Predicción del modelo: `{model_name}`")
+                                            
+                                            prediction_request = {
+                                                "model_name": model_name,
+                                                "features": features
+                                            }
+                                            
+                                            with st.spinner(f"Procesando predicción con {model_name}..."):
+                                                prediction_response = requests.post(
+                                                    'http://localhost:8000/predict',
+                                                    json=prediction_request,
+                                                    timeout=30
+                                                )
+                                            
+                                            if prediction_response.status_code == 200:
+                                                prediction = prediction_response.json()
+                                                pred_value = prediction.get('prediction', 'N/A')
+                                                
+                                                if isinstance(pred_value, (int, float)):
+                                                    pred_class = int(round(pred_value))
+                                                    
+                                                    col1, col2 = st.columns([1, 1])
+                                                    with col1:
+                                                        st.metric(
+                                                            label="Predicción",
+                                                            value=f"Clase {pred_class}",
+                                                            help="Resultado de la clasificación"
+                                                        )
+                                                    with col2:
+                                                        st.metric(
+                                                            label="Confianza",
+                                                            value=f"{abs(pred_value):.3f}",
+                                                            help="Valor de confianza del modelo"
+                                                        )
+                                                    
+                                                    if pred_class == 1:
+                                                        st.success(f"🎯 **Resultado: POSITIVO** (Clase {pred_class})")
+                                                    else:
+                                                        st.info(f"🎯 **Resultado: NEGATIVO** (Clase {pred_class})")
+                                                        
+                                                else:
+                                                    st.success(f"🎯 **Predicción:** {pred_value}")
+                                                    
+                                            else:
+                                                st.error(f"❌ Error en la predicción para `{model_name}`: {prediction_response.text}")
+                                            
+                                            st.markdown("---")
+                                            
+                            except Exception as e:
+                                st.error(f"❌ Error procesando la predicción: {e}")
         else:
             st.error("❌ Falló al obtener archivos subidos o modelos del backend.")
     except Exception as e:
@@ -976,18 +906,16 @@ def prediction_tab():
 
 st.title("Plataforma distribuida de entrenamiento supervisado")
 
-# Single page layout - all sections in sequence
 cluster_tab()
 
-st.markdown("---")  # Separator between sections
+st.markdown("---") 
 
 training_tab()
 
-st.markdown("---")  # Separator between sections
+st.markdown("---") 
 
 prediction_tab()
 
-# Show backend status and clear memory button in sidebar
 st.sidebar.markdown("---")
 st.sidebar.subheader("Estado de la API (backend)")
 try:
@@ -999,7 +927,6 @@ try:
 except Exception:
     st.sidebar.error("❌ API no disponible")
 
-# Add clear memory button to sidebar
 st.sidebar.markdown("---")
 st.sidebar.subheader("Herramientas")
 if st.sidebar.button("🧹 Limpiar Memoria", help="Limpia toda la memoria y los modelos entrenados para evitar desbordamientos y empezar de cero.", use_container_width=True):
