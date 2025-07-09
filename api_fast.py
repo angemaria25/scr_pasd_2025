@@ -50,8 +50,6 @@ def create_app(model_names):
     @app.get("/dataset_preview")
     async def dataset_preview(dataset: str, n: int = 5):
         """Return a preview/sample of the dataset by name, loading from persistent storage if needed."""
-        #from load_data import get_data_manager, load_dataset
-        #import os
         data_manager = get_data_manager()
         preview = data_manager.get_file_sample(dataset, n=n)
         if preview is not None:
@@ -111,7 +109,6 @@ def create_app(model_names):
                     logger.warning(f"Could not clear actor {actor_name}: {e}")
             
             # Clear object store data
-            #from src.data.data_loader import get_data_manager
             data_manager = get_data_manager()
             
             try:
@@ -180,15 +177,6 @@ def create_app(model_names):
         """Get ROC curve as a viewable PNG image"""
         try:
             actor = ray.get_actor(model_name)
-            # Check if model is classification by inspecting metrics or actor info
-            try:
-                metrics = ray.get(actor.get_metrics.remote(), timeout=2.0)
-                # If accuracy is not present, it's likely regression
-                if 'accuracy' not in metrics:
-                    raise HTTPException(status_code=404, detail=f"ROC curve not available for regression models.")
-            except Exception:
-                # If metrics can't be fetched, fallback to trying ROC
-                pass
             roc_png_data = ray.get(actor.generate_roc_png.remote())
             if 'error' in roc_png_data:
                 raise HTTPException(status_code=404, detail=roc_png_data['error'])
@@ -305,7 +293,6 @@ def create_app(model_names):
                     raise HTTPException(status_code=400, detail=f"Unsupported file type: {request.filename}. Only CSV and JSON files are supported.")
                 
                 # Store data using object store
-                #from load_data import get_data_manager
                 data_manager = get_data_manager()
                 
                 try:
@@ -487,9 +474,6 @@ def create_app(model_names):
                 raise HTTPException(status_code=400, detail="No datasets configuration provided")
             
             # Import training function
-            #from src.models.model_trainer import train_multiple_models, ModelActor
-            #from src.data.data_loader import get_data_manager
-            
             from model_trainer import train_multiple_models, ModelActor
             
             batch_results = {}
@@ -498,13 +482,13 @@ def create_app(model_names):
             for filename, config in datasets_config.items():
                 try:
                     # Get configuration for this dataset
-                    task_type = config.get('task_type')
+                    task_type = config.get('task_type', 'classification')  # Default to classification
                     target_column = config.get('target_column')
                     algorithms = config.get('algorithms', [])
                     test_size = config.get('test_size', 0.2)
                     random_state = config.get('random_state', 42)
                     
-                    if not task_type or not target_column or not algorithms:
+                    if not target_column or not algorithms:
                         batch_results[filename] = {
                             "status": "error",
                             "error": "Missing required fields"
@@ -533,9 +517,6 @@ def create_app(model_names):
                         }
                         continue
                     
-                    # All models are now regression models
-                    is_classification = False
-                    
                     # Split features and target
                     if target_column not in df.columns:
                         batch_results[filename] = {
@@ -547,24 +528,30 @@ def create_app(model_names):
                     X = df.drop(target_column, axis=1)
                     y = df[target_column]
                     
-                    # Ensure target is numeric for regression
-                    if not pd.api.types.is_numeric_dtype(y):
-                        try:
-                            y = pd.to_numeric(y, errors='coerce')
-                            if y.isna().any():
-                                batch_results[filename] = {
-                                    "status": "error",
-                                    "error": f"Target column '{target_column}' contains non-numeric values that cannot be converted"
-                                }
-                                continue
-                        except Exception as e:
-                            batch_results[filename] = {
-                                "status": "error",
-                                "error": f"Failed to convert target column to numeric: {str(e)}"
-                            }
-                            continue
+                    # Force classification for all tasks
+                    is_classification = True
+                    task_type = "classification"  # Override to always use classification
                     
-                    logger.info(f"Target column '{target_column}' prepared for regression with {y.nunique()} unique values")
+                    # For classification, ensure target has discrete values
+                    unique_values = y.nunique()
+                    if unique_values > 20:  # Too many unique values for classification
+                        batch_results[filename] = {
+                            "status": "error",
+                            "error": f"Target column has {unique_values} unique values, too many for classification. Consider reducing the number of classes."
+                        }
+                        continue
+                    
+                    # Convert target to categorical if needed
+                    if pd.api.types.is_numeric_dtype(y):
+                        # Keep numeric but ensure it's integer for classification
+                        y = y.astype(int)
+                    else:
+                        # Convert categorical to numeric labels
+                        from sklearn.preprocessing import LabelEncoder
+                        le = LabelEncoder()
+                        y = le.fit_transform(y)
+                    
+                    logger.info(f"Target column '{target_column}' prepared for classification with {y.nunique()} classes")
                     
                     # Convert categorical features to numeric
                     X = pd.get_dummies(X)
@@ -572,18 +559,20 @@ def create_app(model_names):
                     # Train split
                     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
                     
-                    # Define available regression models
-                    from sklearn.ensemble import GradientBoostingRegressor
-                    from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
-                    from sklearn.tree import DecisionTreeRegressor
+                    # Define available classification models only
+                    from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+                    from sklearn.linear_model import LogisticRegression
+                    from sklearn.tree import DecisionTreeClassifier
+                    from sklearn.svm import SVC
+                    from sklearn.neighbors import KNeighborsClassifier
                     
                     model_mapping = {
-                        "decision_tree_regressor": DecisionTreeRegressor(random_state=random_state),
-                        "gradient_boosting_regressor": GradientBoostingRegressor(random_state=random_state),
-                        "linear_regression": LinearRegression(),
-                        "ridge_regression": Ridge(random_state=random_state),
-                        "lasso_regression": Lasso(random_state=random_state),
-                        "elastic_net": ElasticNet(random_state=random_state)
+                        "decision_tree_classifier": DecisionTreeClassifier(random_state=random_state),
+                        "gradient_boosting_classifier": GradientBoostingClassifier(random_state=random_state),
+                        "logistic_regression": LogisticRegression(random_state=random_state, max_iter=1000),
+                        "random_forest_classifier": RandomForestClassifier(random_state=random_state),
+                        "svm_classifier": SVC(random_state=random_state, probability=True),
+                        "k_nearest_neighbors": KNeighborsClassifier()
                     }
                     
                     # Filter models based on user selection
@@ -655,5 +644,3 @@ def create_app(model_names):
             raise HTTPException(status_code=500, detail=str(e))
     
     return app, None
-
-

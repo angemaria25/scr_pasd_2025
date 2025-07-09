@@ -192,8 +192,8 @@ def cluster_tab():
 
 # --- TRAINING TAB ---
 def training_tab():
-    st.header("🏋🏻‍♀️ Entrenamiento de Modelos de Maching Learning de forma distribuida.")
-    st.markdown("Seleccione el datasets deseados en formato CSV/JSON para realizar el procesamiento y entrenamiento distribuido de modelos de ML en el clúster de Ray.")
+    st.header("🏋🏻‍♀️ Entrenamiento de Modelos de Machine Learning de forma distribuida.")
+    st.markdown("Seleccione los datasets deseados en formato CSV/JSON para realizar el procesamiento y entrenamiento distribuido de modelos de ML en el clúster de Ray.")
     
     # Check for existing trained models (no longer shown in UI, but still fetched for prediction section)
     try:
@@ -210,7 +210,7 @@ def training_tab():
         
         if time_ago < 3600:  # Show if less than 1 hour ago
             minutes_ago = time_ago // 60
-            with st.expander(f"📈 Recent Training Results ({minutes_ago} minutes ago)"):
+            with st.expander(f"📈 Resultados de Entrenamiento Recientes ({minutes_ago} minutos atrás)"):
                 result = last_results['results']
                 
                 if 'results' in result:
@@ -233,9 +233,9 @@ def training_tab():
                                         # If conversion fails, display as-is
                                         st.write(f"  - {model_name}: {accuracy}")
                                 else:
-                                    st.write(f"  - {model_name}: Training completed")
+                                    st.write(f"  - {model_name}: Entrenamiento completado")
     
-    st.info("💡 Para realizar el entrenamiento primero suba el datasets deseado y luego seleccione la variable objetivo...")
+    st.info("💡 Para realizar el entrenamiento primero suba el dataset deseado y luego seleccione la variable objetivo...")
     
     # Step 1: File Upload
     st.subheader("1. 📁 Subir Archivos CSV/JSON")
@@ -369,7 +369,7 @@ def training_tab():
                     st.write("**Estado del backend:**")
                     backend_status = check_backend_connectivity()
                     if backend_status["status"] == "connected":
-                        st.success("✅ Backend accesible")
+                        st.success("�� Backend accesible")
                     else:
                         st.error(f"❌ Problema con backend: {backend_status['message']}")
                     
@@ -429,16 +429,16 @@ def training_tab():
             pass  # If backend check fails, continue with cached session state
     
     if successfully_uploaded_files:
-        st.subheader("2. ⚙️ Configure Training Parameters")
+        st.subheader("2. ⚙️ Configurar Parámetros de Entrenamiento")
         for filename, file_info in successfully_uploaded_files.items():
-            st.markdown(f"#### 📄 Configure {filename}")
-            st.caption(f"{file_info['rows']} rows, {len(file_info['columns'])} columns")
+            st.markdown(f"#### 📄 Configurar {filename}")
+            st.caption(f"{file_info['rows']} filas, {len(file_info['columns'])} columnas")
 
-            # Show file preview
+            # Show file preview by default
             if file_info.get('preview'):
-                with st.expander("👁️ View Data Preview"):
-                    preview_df = pd.DataFrame(file_info['preview'])
-                    st.dataframe(preview_df, use_container_width=True)
+                st.markdown("**👁️ Vista previa de los datos:**")
+                preview_df = pd.DataFrame(file_info['preview'])
+                st.dataframe(preview_df, use_container_width=True)
 
             # Smart target column detection
             default_target = "target"
@@ -450,39 +450,40 @@ def training_tab():
                 default_target = next(col for col in file_info['columns'] if col.lower() == "value")
             elif any("y" == col.lower() for col in file_info['columns']):
                 default_target = next(col for col in file_info['columns'] if col.lower() == "y")
+            
             # Target column selection with smart default
             try:
                 default_index = file_info['columns'].index(default_target)
             except ValueError:
                 default_index = 0
             target_column = st.selectbox(
-                "Target Column",
+                "Columna Objetivo (Target)",
                 file_info['columns'],
                 index=default_index,
                 key=f"target_{filename}",
-                help=f"The column to predict. Usually named 'target', 'price', 'value', or 'y'"
+                help=f"La columna a predecir. Usualmente llamada 'target', 'price', 'value', o 'y'"
             )
 
-            # Algorithm selection - Only regression models
-            task_type = "regression"  # Fixed to regression only
-            algorithms = ["Decision Tree Regressor", "Gradient Boosting Regressor", "Linear Regression", "Ridge Regression", "Lasso Regression", "Elastic Net"]
+            # Algorithm selection - Only classification models
+            task_type = "classification"  # Fixed to classification only
+            algorithms = ["Decision Tree Classifier", "Gradient Boosting Classifier", "Logistic Regression", "Random Forest Classifier", "SVM Classifier", "K-Nearest Neighbors"]
             selected_algorithms = st.multiselect(
-                "Select Regression Models to Train (you can select multiple)",
+                "Seleccionar Modelos de Clasificación para Entrenar (puedes seleccionar múltiples)",
                 algorithms,
                 default=[algorithms[0]],  # Default to first algorithm
                 key=f"algos_{filename}",
-                help="You can select multiple regression models to train and compare their performance"
+                help="Puedes seleccionar múltiples modelos de clasificación para entrenar y comparar su rendimiento. Estos modelos predicen categorías (0/1, clases discretas)"
             )
 
             # Advanced parameters section (not nested in expander)
-            st.markdown("**⚙️ Advanced Parameters:**")
+            st.markdown("**⚙️ Parámetros Avanzados:**")
             col1, col2, col3 = st.columns(3)
             with col1:
-                test_size = st.slider("Test Size", 0.1, 0.5, 0.2, key=f"test_size_{filename}")
+                test_size = st.slider("Tamaño del Test", 0.1, 0.5, 0.2, key=f"test_size_{filename}")
             with col2:
                 random_state = st.number_input("Random State", 1, 1000, 42, key=f"random_state_{filename}")
 
-            # Store configuration (cross_val_folds removed)
+            # Store configuration
             st.session_state['file_configs'][filename] = {
                 'task_type': task_type,
                 'target_column': target_column,
@@ -492,13 +493,13 @@ def training_tab():
             }
             # Show current configuration status
             if selected_algorithms:
-                st.success(f"✅ {len(selected_algorithms)} model(s) configured for {filename}")
+                st.success(f"✅ {len(selected_algorithms)} modelo(s) configurado(s) para {filename}")
             else:
-                st.warning("⚠️ Please select at least one algorithm")
+                st.warning("⚠️ Por favor selecciona al menos un algoritmo")
             st.markdown("---")  # Separator between datasets
         
         # Add single "Train All" button at the end
-        st.subheader("3. 🚀 Train All Models")
+        st.subheader("3. 🚀 Entrenar Todos los Modelos")
         
         # Count total models across all datasets (only successfully uploaded ones)
         total_models = 0
@@ -510,28 +511,22 @@ def training_tab():
                 valid_configs += 1
         
         if total_models > 0:
-            st.info(f"📊 Ready to train {total_models} model(s) across {valid_configs} dataset(s)")
+            st.info(f"📊 Listo para entrenar {total_models} modelo(s) en {valid_configs} dataset(s)")
             
-            if st.button("🚀 Train All Models", type="primary", use_container_width=True):
-                with st.spinner(f"Training {total_models} model(s) across {valid_configs} dataset(s)..."):
+            if st.button("🚀 Entrenar Todos los Modelos", type="primary", use_container_width=True):
+                with st.spinner(f"Entrenando {total_models} modelo(s) en {valid_configs} dataset(s)..."):
                     try:
                         # Create algorithm mapping function
                         def convert_algorithm_name(algo_name, task_type):
                             """Convert display name to API name"""
                             mapping = {
                                 # Classification algorithms
-                                "Decision Tree": "decision_tree",
-                                "Gradient Boosting": "gradient_boosting", 
-                                "SVM": "svm",
+                                "Decision Tree Classifier": "decision_tree_classifier",
+                                "Gradient Boosting Classifier": "gradient_boosting_classifier", 
                                 "Logistic Regression": "logistic_regression",
-                                "K-Nearest Neighbors": "k_nearest_neighbors",
-                                # Regression algorithms
-                                "Decision Tree Regressor": "decision_tree_regressor",
-                                "Gradient Boosting Regressor": "gradient_boosting_regressor",
-                                "Linear Regression": "linear_regression",
-                                "Ridge Regression": "ridge_regression",
-                                "Lasso Regression": "lasso_regression",
-                                "Elastic Net": "elastic_net"
+                                "Random Forest Classifier": "random_forest_classifier",
+                                "SVM Classifier": "svm_classifier",
+                                "K-Nearest Neighbors": "k_nearest_neighbors"
                             }
                             return mapping.get(algo_name, algo_name.lower().replace(" ", "_"))
                         
@@ -577,82 +572,96 @@ def training_tab():
                                     if dataset_result.get('status') == 'success' and 'results' in dataset_result:
                                         total_successful += len(dataset_result['results'])
                             
-                            st.success(f"✅ Batch training completed! {total_successful} model(s) trained successfully!")
+                            st.success(f"✅ ¡Entrenamiento por lotes completado! {total_successful} modelo(s) entrenado(s) exitosamente!")
                             
                             # Show results for each dataset
                             if 'results' in result:
                                 for dataset_name, dataset_result in result['results'].items():
-                                    with st.expander(f"📊 Results for {dataset_name}"):
+                                    with st.expander(f"📊 Resultados para {dataset_name}"):
                                         if dataset_result.get('status') == 'success':
                                             models_count = len(dataset_result.get('results', {}))
-                                            st.success(f"✅ {models_count} model(s) trained successfully")
+                                            st.success(f"✅ {models_count} modelo(s) entrenado(s) exitosamente")
                                             # Show results for each model in this dataset
                                             if 'results' in dataset_result:
                                                 for model_name, model_result in dataset_result['results'].items():
                                                     st.markdown(f"**{model_name}:**")
-                                                    # All models are regression models now
-                                                    st.markdown(f"**{model_name}** (Regression Model)")
+                                                    # All models are classification models now
+                                                    st.markdown(f"**{model_name}** (Modelo de Clasificación)")
                                                     
-                                                    # Display RMSE as primary metric
-                                                    rmse = model_result.get('metrics', {}).get('rmse') if 'metrics' in model_result else None
-                                                    if rmse is None:
-                                                        rmse = model_result.get('rmse')
-                                                    if rmse is not None:
+                                                    # Display accuracy as primary metric
+                                                    metrics = model_result.get('metrics', {})
+                                                    accuracy = metrics.get('accuracy')
+                                                    if accuracy is not None:
                                                         try:
-                                                            rmse_float = float(rmse)
-                                                            st.info(f"📉 RMSE: {rmse_float:.4f}")
+                                                            accuracy_float = float(accuracy)
+                                                            st.info(f"🎯 Precisión: {accuracy_float:.4f}")
                                                         except (ValueError, TypeError):
-                                                            st.info(f"📉 RMSE: {rmse}")
+                                                            st.info(f"🎯 Precisión: {accuracy}")
                                                     else:
-                                                        st.warning("📉 RMSE: Not available")
+                                                        st.warning("🎯 Precisión: No disponible")
                                                     
-                                                    # Display R² score as secondary metric
-                                                    r2 = model_result.get('metrics', {}).get('r2_score') if 'metrics' in model_result else None
-                                                    if r2 is not None:
+                                                    # Display other classification metrics
+                                                    precision = metrics.get('precision')
+                                                    if precision is not None:
                                                         try:
-                                                            r2_float = float(r2)
-                                                            st.info(f"📊 R² Score: {r2_float:.4f}")
+                                                            precision_float = float(precision)
+                                                            st.info(f"📊 Precisión: {precision_float:.4f}")
                                                         except (ValueError, TypeError):
-                                                            st.info(f"📊 R² Score: {r2}")
+                                                            st.info(f"📊 Precisión: {precision}")
                                                     
-                                                    # Display MSE as additional metric
-                                                    mse = model_result.get('metrics', {}).get('mse') if 'metrics' in model_result else None
-                                                    if mse is not None:
+                                                    recall = metrics.get('recall')
+                                                    if recall is not None:
                                                         try:
-                                                            mse_float = float(mse)
-                                                            st.info(f"📈 MSE: {mse_float:.4f}")
+                                                            recall_float = float(recall)
+                                                            st.info(f"📈 Recall: {recall_float:.4f}")
                                                         except (ValueError, TypeError):
-                                                            st.info(f"📈 MSE: {mse}")
+                                                            st.info(f"📈 Recall: {recall}")
+                                                    
+                                                    f1 = metrics.get('f1_score')
+                                                    if f1 is not None:
+                                                        try:
+                                                            f1_float = float(f1)
+                                                            st.info(f"🔄 F1-Score: {f1_float:.4f}")
+                                                        except (ValueError, TypeError):
+                                                            st.info(f"🔄 F1-Score: {f1}")
 
                                                     # Show additional metrics if available
-                                                    if 'metrics' in model_result and model_result['metrics']:
-                                                        st.markdown("**Detailed metrics:**")
-                                                        st.json(model_result['metrics'])
+                                                    if metrics:
+                                                        st.markdown("**Métricas detalladas:**")
+                                                        st.json(metrics)
 
-                                                    # Visualizations: Only learning curve for regression models
+                                                    # Visualizations for classification
                                                     col_viz1, col_viz2 = st.columns(2)
                                                     with col_viz1:
-                                                        st.info("📊 ROC curves are not applicable for regression models")
+                                                        try:
+                                                            roc_response = requests.get(f'http://localhost:8000/visualization/{model_name}/roc_curve', timeout=60)
+                                                            content_type = roc_response.headers.get('content-type', '')
+                                                            content_len = len(roc_response.content)
+                                                            if roc_response.status_code == 200 and content_type.startswith('image') and content_len > 100:
+                                                                st.image(roc_response.content, caption=f"Curva ROC - {model_name}")
+                                                            else:
+                                                                st.warning("Curva ROC no disponible.")
+                                                        except Exception as e:
+                                                            st.warning(f"Error en curva ROC: {e}")
+                                                    
                                                     with col_viz2:
                                                         try:
                                                             learning_response = requests.get(f'http://localhost:8000/visualization/{model_name}/learning_curve', timeout=60)
                                                             content_type = learning_response.headers.get('content-type', '')
                                                             content_len = len(learning_response.content)
                                                             if learning_response.status_code == 200 and content_type.startswith('image') and content_len > 100:
-                                                                st.image(learning_response.content, caption=f"Learning Curve - {model_name}")
-                                                            elif learning_response.status_code == 200 and content_len > 0 and not content_type.startswith('image'):
-                                                                st.warning(f"Learning curve not available (backend returned non-image content).")
+                                                                st.image(learning_response.content, caption=f"Curva de Aprendizaje - {model_name}")
                                                             else:
-                                                                st.warning("Learning curve not available.")
+                                                                st.warning("Curva de aprendizaje no disponible.")
                                                         except Exception as e:
-                                                            st.warning(f"Learning curve error: {e}")
+                                                            st.warning(f"Error en curva de aprendizaje: {e}")
                                         else:
-                                            st.error(f"❌ Training failed for {dataset_name}: {dataset_result.get('error', 'Unknown error')}")
+                                            st.error(f"❌ Entrenamiento falló para {dataset_name}: {dataset_result.get('error', 'Error desconocido')}")
                         else:
-                            st.error(f"❌ Batch training failed: {response.text}")
+                            st.error(f"❌ Entrenamiento por lotes falló: {response.text}")
                             
                     except Exception as e:
-                        st.error(f"❌ Error during batch training: {e}")
+                        st.error(f"❌ Error durante el entrenamiento por lotes: {e}")
                         
                         # Additional error handling: check if cluster is healthy
                         cluster_status = get_cluster_status()
@@ -662,7 +671,7 @@ def training_tab():
                         else:
                             st.info("El clúster está funcionando. El error puede ser temporal. Intenta nuevamente en unos momentos.")
         else:
-            st.warning("⚠️ Please configure and select algorithms for at least one dataset before training")
+            st.warning("⚠️ Por favor configura y selecciona algoritmos para al menos un dataset antes del entrenamiento")
     else:
         # No successfully uploaded files
         if st.session_state['uploaded_files']:
@@ -742,9 +751,9 @@ def prediction_tab():
             # Get available datasets (intersection with uploaded files)
             available_datasets = [filename_map[ds] for ds in dataset_to_models if ds in filename_map]
             if not available_datasets:
-                st.info("� No datasets with trained models available. Train some models first in the Training section.")
+                st.info("ℹ️ No hay datasets con modelos entrenados disponibles. Entrena algunos modelos primero en la sección de Entrenamiento.")
             else:
-                selected_dataset = st.selectbox("Select a dataset:", available_datasets)
+                selected_dataset = st.selectbox("Selecciona un dataset:", available_datasets)
                 dataset_key = selected_dataset.replace('.csv','').replace('.json','')
                 # --- Robust preview: fetch from backend preview endpoint ---
 
@@ -760,9 +769,9 @@ def prediction_tab():
                             preview_columns = list(preview_data[0].keys())
                         preview_error = preview_json.get('error')
                     else:
-                        preview_error = f"Backend error: {preview_resp.text}"
+                        preview_error = f"Error del backend: {preview_resp.text}"
                 except Exception as e:
-                    preview_error = f"Preview fetch error: {e}"
+                    preview_error = f"Error obteniendo vista previa: {e}"
 
                 # Always try to get columns from uploaded_files if not set
                 if not preview_columns:
@@ -770,23 +779,23 @@ def prediction_tab():
                     if dataset_info:
                         preview_columns = dataset_info.get('columns', [])
 
-                st.write(f"**Preview for {selected_dataset}:**")
+                st.write(f"**Vista previa para {selected_dataset}:**")
                 if preview_data and preview_columns:
                     preview_df = pd.DataFrame(preview_data, columns=preview_columns)
                     st.dataframe(preview_df, use_container_width=True, hide_index=True)
                 elif preview_error:
-                    st.info(f"No preview available: {preview_error}")
+                    st.info(f"Vista previa no disponible: {preview_error}")
                 else:
-                    st.info("No preview available for this dataset.")
+                    st.info("Vista previa no disponible para este dataset.")
 
                 # Show models trained on this dataset
                 models_for_dataset = dataset_to_models.get(dataset_key, [])
                 if not models_for_dataset:
-                    st.warning("No models trained on this dataset.")
+                    st.warning("No hay modelos entrenados en este dataset.")
                 else:
-                    selected_models = st.multiselect("Select model(s) to use for prediction:", models_for_dataset, default=models_for_dataset[:1])
+                    selected_models = st.multiselect("Selecciona modelo(s) para usar en la predicción:", models_for_dataset, default=models_for_dataset[:1])
                     # Feature input UI (organized in max 3 columns)
-                    st.markdown("**Enter feature values for prediction:**")
+                    st.markdown("**Ingresa valores de características para la predicción:**")
                     # Build list of features (skip target)
                     # Use preview_columns if available, else fallback to dataset_info columns
                     input_features = [col for col in (preview_columns if preview_columns else []) if col.lower() != 'target']
@@ -813,12 +822,12 @@ def prediction_tab():
                                             f"{feature_name}", 
                                             key=f"predict_{feature_name}_{selected_dataset}"
                                         )
-                    if st.button("🚀 Predict", use_container_width=True):
+                    if st.button("🚀 Predecir", use_container_width=True):
                         # Prepare feature dict for prediction
                         try:
                             features = {k: (float(v) if v.replace('.','',1).isdigit() else v) for k,v in feature_inputs.items() if v != ''}
                             if not features:
-                                st.warning("Please enter values for at least one feature.")
+                                st.warning("Por favor ingresa valores para al menos una característica.")
                             else:
                                 # Show predictions for each selected model
                                 for model_name in selected_models:
@@ -833,54 +842,61 @@ def prediction_tab():
                                     )
                                     if prediction_response.status_code == 200:
                                         prediction = prediction_response.json()
-                                        st.success(f"Model `{model_name}` prediction: {prediction.get('prediction', 'N/A')}")
+                                        pred_value = prediction.get('prediction', 'N/A')
+                                        
+                                        # Format prediction for classification (should be 0 or 1)
+                                        if isinstance(pred_value, (int, float)):
+                                            pred_class = int(round(pred_value))
+                                            st.success(f"Modelo `{model_name}` predicción: **{pred_class}** (Clasificación)")
+                                        else:
+                                            st.success(f"Modelo `{model_name}` predicción: **{pred_value}**")
                                     else:
-                                        st.error(f"Prediction failed for `{model_name}`: {prediction_response.text}")
+                                        st.error(f"Predicción falló para `{model_name}`: {prediction_response.text}")
                         except Exception as e:
-                            st.error(f"Prediction error: {e}")
+                            st.error(f"Error en predicción: {e}")
         else:
-            st.error("❌ Failed to get uploaded files or models from backend.")
+            st.error("❌ Falló al obtener archivos subidos o modelos del backend.")
     except Exception as e:
-        st.error(f"❌ Error connecting to backend: {e}")
+        st.error(f"❌ Error conectando al backend: {e}")
 
 # --- DEBUG SECTION ---
 def debug_section():
-    with st.sidebar.expander("🔧 Debug Tools"):
-        if st.button("Clear Session State"):
+    with st.sidebar.expander("🔧 Herramientas de Debug"):
+        if st.button("Limpiar Estado de Sesión"):
             st.session_state['uploaded_files'] = {}
             st.session_state['file_configs'] = {}
             st.session_state['last_training_results'] = None
-            st.success("Session state cleared")
+            st.success("Estado de sesión limpiado")
             st.rerun()
         
-        if st.button("Show Session State"):
+        if st.button("Mostrar Estado de Sesión"):
             st.json({
                 "uploaded_files": st.session_state.get('uploaded_files', {}),
                 "file_configs": st.session_state.get('file_configs', {}),
                 "last_training_results": st.session_state.get('last_training_results')
             })
         
-        if st.button("Check Backend Uploaded Files"):
+        if st.button("Verificar Archivos Subidos del Backend"):
             try:
                 response = requests.get('http://localhost:8000/uploaded_files', timeout=10)
                 if response.status_code == 200:
                     st.json(response.json())
                 else:
-                    st.error(f"Backend error: {response.text}")
+                    st.error(f"Error del backend: {response.text}")
             except Exception as e:
-                st.error(f"Connection error: {e}")
+                st.error(f"Error de conexión: {e}")
         
-        if st.button("Check Trained Models"):
+        if st.button("Verificar Modelos Entrenados"):
             try:
                 response = requests.get('http://localhost:8000/models', timeout=10)
                 if response.status_code == 200:
                     st.json(response.json())
                 else:
-                    st.error(f"Backend error: {response.text}")
+                    st.error(f"Error del backend: {response.text}")
             except Exception as e:
-                st.error(f"Connection error: {e}")
+                st.error(f"Error de conexión: {e}")
                 
-        if st.button("Check Cluster Status"):
+        if st.button("Verificar Estado del Clúster"):
             cluster_status = get_cluster_status()
             st.json(cluster_status)
 

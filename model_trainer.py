@@ -203,6 +203,19 @@ class ModelActor:
         
         # Ensure columns are in the correct order if the model has feature_names_in_
         if hasattr(self.model, 'feature_names_in_'):
+            # Check for missing features and add them with default values (0)
+            missing_features = set(self.model.feature_names_in_) - set(X.columns)
+            if missing_features:
+                logger.warning(f"Missing features in prediction input: {missing_features}. Adding with default value 0.")
+                for feature in missing_features:
+                    X[feature] = 0
+            
+            # Check for extra features and remove them
+            extra_features = set(X.columns) - set(self.model.feature_names_in_)
+            if extra_features:
+                logger.warning(f"Extra features in prediction input: {extra_features}. Removing them.")
+                X = X.drop(columns=list(extra_features))
+            
             # Reorder columns to match training order
             X = X[self.model.feature_names_in_]
         
