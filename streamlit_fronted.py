@@ -988,39 +988,3 @@ try:
         st.sidebar.warning("⚠️ API con problemas")
 except Exception:
     st.sidebar.error("❌ API no disponible")
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("🧹 Limpiar Memoria")
-st.sidebar.markdown("Limpia todos los modelos entrenados y datasets cargados.")
-
-if st.sidebar.button("🗑️ Limpiar Todo", type="secondary", use_container_width=True):
-    try:
-        # Clear ALL session state completely
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        
-        # Reinitialize with defaults
-        ensure_session_state()
-        
-        # Clear any Streamlit caches
-        st.cache_data.clear()
-        if hasattr(st, 'cache_resource'):
-            st.cache_resource.clear()
-        
-        # Try to clear backend data
-        backend_cleared = False
-        try:
-            clear_response = requests.post('http://localhost:8000/clear_all', timeout=10)
-            if clear_response.status_code == 200:
-                backend_cleared = True
-                st.sidebar.success("✅ Memoria limpiada exitosamente")
-            else:
-                st.sidebar.warning("⚠️ Memoria local limpiada, pero el backend puede tener datos residuales")
-        except Exception as e:
-            st.sidebar.warning(f"⚠️ Memoria local limpiada, pero no se pudo conectar al backend: {e}")
-        
-        # Force a complete page refresh
-        st.rerun()
-        
-    except Exception as e:
-        st.sidebar.error(f"❌ Error limpiando memoria: {e}")
