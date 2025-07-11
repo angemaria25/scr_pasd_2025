@@ -950,11 +950,6 @@ def prediction_tab():
                                                         help="Resultado de la clasificación"
                                                     )
                                                     
-                                                    #if pred_class == 1:
-                                                        #st.success(f" **Resultado: POSITIVO** (Clase {pred_class})")
-                                                    #else:
-                                                        #st.info(f" **Resultado: NEGATIVO** (Clase {pred_class})")
-                                                        
                                                 else:
                                                     st.success(f" **Predicción:** {pred_value}")
                                                     
