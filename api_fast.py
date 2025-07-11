@@ -618,4 +618,43 @@ def create_app(model_names):
             logger.error(f"Batch training error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
+    @app.post("/clear_all")
+    async def clear_all():
+        """Clear all models and uploaded data from Ray cluster"""
+        try:
+            # Clear all named actors (models)
+            all_actors = ray.util.list_named_actors()
+            cleared_models = 0
+            
+            for actor_name in all_actors:
+                try:
+                    # Try to kill the actor
+                    actor = ray.get_actor(actor_name)
+                    ray.kill(actor)
+                    cleared_models += 1
+                except Exception as e:
+                    logger.warning(f"Could not clear actor {actor_name}: {e}")
+            
+            # Clear data manager
+            try:
+                data_manager = get_data_manager()
+                data_manager.clear_all_data()
+                cleared_data = True
+            except Exception as e:
+                logger.warning(f"Could not clear data manager: {e}")
+                cleared_data = False
+            
+            return {
+                "status": "success",
+                "cleared_models": cleared_models,
+                "cleared_data": cleared_data,
+                "message": f"Cleared {cleared_models} models and data storage"
+            }
+        except Exception as e:
+            logger.error(f"Error clearing all data: {e}")
+            return {
+                "status": "error",
+                "error": str(e)
+            }
+    
     return app, None

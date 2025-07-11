@@ -162,6 +162,17 @@ class ObjectStoreDataManager:
             logger.error(f"Error removing file {filename}: {e}")
             return False
     
+    def clear_all_data(self):
+        """Clear all stored data from the object store"""
+        try:
+            cleared_count = len(self.file_registry)
+            self.file_registry.clear()
+            logger.info(f"Cleared {cleared_count} files from object store")
+            return True
+        except Exception as e:
+            logger.error(f"Error clearing all data: {e}")
+            return False
+    
 _data_manager = None
 
 def get_data_manager():

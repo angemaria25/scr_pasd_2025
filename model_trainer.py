@@ -58,11 +58,15 @@ def train_model(model, X_train, y_train, X_test, y_test, model_name=None):
         # Calculate metrics - Force classification metrics only
         metrics = {}
         
+        # Ensure y_test and y_pred are numpy arrays for proper metric calculation
+        y_test_array = np.array(y_test)
+        y_pred_array = np.array(y_pred)
+        
         # Classification metrics
-        metrics['accuracy'] = accuracy_score(y_test, y_pred)
-        metrics['precision'] = precision_score(y_test, y_pred, average='weighted', zero_division=0)
-        metrics['recall'] = recall_score(y_test, y_pred, average='weighted', zero_division=0)
-        metrics['f1_score'] = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+        metrics['accuracy'] = float(accuracy_score(y_test_array, y_pred_array))
+        metrics['precision'] = float(precision_score(y_test_array, y_pred_array, average='weighted', zero_division=0))
+        metrics['recall'] = float(recall_score(y_test_array, y_pred_array, average='weighted', zero_division=0))
+        metrics['f1_score'] = float(f1_score(y_test_array, y_pred_array, average='weighted', zero_division=0))
             
         metrics['training_time'] = training_time
         
@@ -450,17 +454,22 @@ class ModelActor:
             import numpy as np
             import base64
             from io import BytesIO
+            from sklearn.base import clone
             
             X_train = self.training_data['X_train']
             y_train = self.training_data['y_train']
             
-            # Generate learning curve data
+            # Create a fresh copy of the model for learning curve generation
+            fresh_model = clone(self.model)
+            
+            # Generate learning curve data with reduced complexity for faster computation
             train_sizes, train_scores, val_scores = learning_curve(
-                self.model, X_train, y_train, 
-                cv=5, 
-                n_jobs=-1,
-                train_sizes=np.linspace(0.1, 1.0, 10),
-                scoring='accuracy'
+                fresh_model, X_train, y_train, 
+                cv=3,  # Reduced CV folds for faster computation
+                n_jobs=1,  # Use single job to avoid conflicts
+                train_sizes=np.linspace(0.2, 1.0, 6),  # Fewer points for faster computation
+                scoring='accuracy',
+                random_state=42
             )
             
             # Calculate mean and standard deviation

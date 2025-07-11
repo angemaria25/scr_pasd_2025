@@ -682,10 +682,7 @@ def training_tab():
                                                         except (ValueError, TypeError):
                                                             st.info(f"🔄 F1-Score: {f1}")
 
-                                                    if metrics:
-                                                        st.markdown("**Métricas detalladas:**")
-                                                        st.json(metrics)
-                                                    
+                                                                                                        
                                                     # Crear tres columnas para las visualizaciones
                                                     st.markdown("**📊 Visualizaciones del Modelo:**")
                                                     col1, col2, col3 = st.columns(3)
@@ -996,3 +993,28 @@ try:
         st.sidebar.warning("⚠️ API con problemas")
 except Exception:
     st.sidebar.error("❌ API no disponible")
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🧹 Limpiar Memoria")
+st.sidebar.markdown("Limpia todos los modelos entrenados y datasets cargados.")
+
+if st.sidebar.button("🗑️ Limpiar Todo", type="secondary", use_container_width=True):
+    try:
+        # Clear session state
+        st.session_state['uploaded_files'] = {}
+        st.session_state['file_configs'] = {}
+        st.session_state['last_training_results'] = None
+        
+        # Try to clear backend data
+        try:
+            clear_response = requests.post('http://localhost:8000/clear_all', timeout=10)
+            if clear_response.status_code == 200:
+                st.sidebar.success("✅ Memoria limpiada exitosamente")
+            else:
+                st.sidebar.warning("⚠️ Memoria local limpiada, pero el backend puede tener datos residuales")
+        except Exception:
+            st.sidebar.warning("⚠️ Memoria local limpiada, pero no se pudo conectar al backend")
+        
+        st.rerun()
+    except Exception as e:
+        st.sidebar.error(f"❌ Error limpiando memoria: {e}")
