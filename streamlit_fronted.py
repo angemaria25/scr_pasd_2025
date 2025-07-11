@@ -685,18 +685,52 @@ def training_tab():
                                                     if metrics:
                                                         st.markdown("**Métricas detalladas:**")
                                                         st.json(metrics)
-                                                        
-                                                    st.markdown("**📊 Matriz de Confusión:**")
-                                                    try:
-                                                        confusion_response = requests.get(f'http://localhost:8000/visualization/{model_name}/confusion_matrix', timeout=60)
-                                                        content_type = confusion_response.headers.get('content-type', '')
-                                                        content_len = len(confusion_response.content)
-                                                        if confusion_response.status_code == 200 and content_type.startswith('image') and content_len > 100:
-                                                            st.image(confusion_response.content, caption=f"Matriz de Confusión - {model_name}")
-                                                        else:
-                                                            st.warning("Matriz de confusión no disponible.")
-                                                    except Exception as e:
-                                                        st.warning(f"Error en matriz de confusión: {e}")
+                                                    
+                                                    # Crear tres columnas para las visualizaciones
+                                                    st.markdown("**📊 Visualizaciones del Modelo:**")
+                                                    col1, col2, col3 = st.columns(3)
+                                                    
+                                                    # Matriz de Confusión
+                                                    with col1:
+                                                        st.markdown("**Matriz de Confusión**")
+                                                        try:
+                                                            confusion_response = requests.get(f'http://localhost:8000/visualization/{model_name}/confusion_matrix', timeout=60)
+                                                            content_type = confusion_response.headers.get('content-type', '')
+                                                            content_len = len(confusion_response.content)
+                                                            if confusion_response.status_code == 200 and content_type.startswith('image') and content_len > 100:
+                                                                st.image(confusion_response.content, caption=f"Matriz de Confusión")
+                                                            else:
+                                                                st.warning("Matriz de confusión no disponible.")
+                                                        except Exception as e:
+                                                            st.warning(f"Error: {e}")
+                                                    
+                                                    # Curva ROC
+                                                    with col2:
+                                                        st.markdown("**Curva ROC**")
+                                                        try:
+                                                            roc_response = requests.get(f'http://localhost:8000/visualization/{model_name}/roc_curve', timeout=60)
+                                                            content_type = roc_response.headers.get('content-type', '')
+                                                            content_len = len(roc_response.content)
+                                                            if roc_response.status_code == 200 and content_type.startswith('image') and content_len > 100:
+                                                                st.image(roc_response.content, caption=f"Curva ROC")
+                                                            else:
+                                                                st.warning("Curva ROC no disponible.")
+                                                        except Exception as e:
+                                                            st.warning(f"Error: {e}")
+                                                    
+                                                    # Curva de Aprendizaje
+                                                    with col3:
+                                                        st.markdown("**Curva de Aprendizaje**")
+                                                        try:
+                                                            learning_response = requests.get(f'http://localhost:8000/visualization/{model_name}/learning_curve', timeout=60)
+                                                            content_type = learning_response.headers.get('content-type', '')
+                                                            content_len = len(learning_response.content)
+                                                            if learning_response.status_code == 200 and content_type.startswith('image') and content_len > 100:
+                                                                st.image(learning_response.content, caption=f"Curva de Aprendizaje")
+                                                            else:
+                                                                st.warning("Curva de aprendizaje no disponible.")
+                                                        except Exception as e:
+                                                            st.warning(f"Error: {e}")
                                         else:
                                             st.error(f"❌ Entrenamiento falló para {dataset_name}: {dataset_result.get('error', 'Error desconocido')}")
                         else:
@@ -910,26 +944,15 @@ def prediction_tab():
                                                 prediction = prediction_response.json()
                                                 pred_value = prediction.get('prediction', 'N/A')
                                                 
-                                                # Enhanced prediction display
                                                 if isinstance(pred_value, (int, float)):
                                                     pred_class = int(round(pred_value))
                                                     
-                                                    # Create a nice result display
-                                                    col1, col2 = st.columns([1, 1])
-                                                    with col1:
-                                                        st.metric(
-                                                            label="Predicción",
-                                                            value=f"Clase {pred_class}",
-                                                            help="Resultado de la clasificación"
-                                                        )
-                                                    with col2:
-                                                        st.metric(
-                                                            label="Confianza",
-                                                            value=f"{abs(pred_value):.3f}",
-                                                            help="Valor de confianza del modelo"
-                                                        )
+                                                    st.metric(
+                                                        label="Predicción",
+                                                        value=f"Clase {pred_class}",
+                                                        help="Resultado de la clasificación"
+                                                    )
                                                     
-                                                    # Color-coded result
                                                     if pred_class == 1:
                                                         st.success(f"🎯 **Resultado: POSITIVO** (Clase {pred_class})")
                                                     else:
@@ -953,18 +976,16 @@ def prediction_tab():
 
 st.title("Plataforma distribuida de entrenamiento supervisado")
 
-# Single page layout - all sections in sequence
 cluster_tab()
 
-st.markdown("---")  # Separator between sections
+st.markdown("---")  
 
 training_tab()
 
-st.markdown("---")  # Separator between sections
+st.markdown("---")  
 
 prediction_tab()
 
-# Show backend status in sidebar
 st.sidebar.markdown("---")
 st.sidebar.subheader("Estado de la API (backend)")
 try:

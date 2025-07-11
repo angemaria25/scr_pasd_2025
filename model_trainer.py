@@ -344,14 +344,174 @@ class ModelActor:
         }
     
 
-    def generate_plots_png(self):
+    def generate_roc_png(self):
         """
-        Generate confusion matrix as PNG image for classification models.
+        Generate ROC curve as PNG image (base64 encoded).
         
         Returns:
             A dictionary containing the PNG image as base64 string.
         """
+        try:
+            if not self.training_data:
+                return {"error": "No training data available for ROC curve generation"}
+            
+            import matplotlib.pyplot as plt
+            from sklearn.metrics import roc_curve, auc
+            from sklearn.preprocessing import label_binarize
+            import numpy as np
+            import base64
+            from io import BytesIO
+            
+            X_test = self.training_data['X_test']
+            y_test = self.training_data['y_test']
+            
+            # Check if model has predict_proba method
+            if not hasattr(self.model, 'predict_proba'):
+                return {"error": "Model does not support probability predictions for ROC curve"}
+            
+            # Get prediction probabilities
+            y_proba = self.model.predict_proba(X_test)
+            
+            # Handle binary and multiclass classification
+            n_classes = len(np.unique(y_test))
+            
+            plt.figure(figsize=(8, 6))
+            
+            if n_classes == 2:
+                # Binary classification
+                fpr, tpr, _ = roc_curve(y_test, y_proba[:, 1])
+                roc_auc = auc(fpr, tpr)
+                
+                plt.plot(fpr, tpr, color='darkorange', lw=2, 
+                        label=f'ROC curve (AUC = {roc_auc:.2f})')
+                plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+                plt.xlim([0.0, 1.0])
+                plt.ylim([0.0, 1.05])
+                plt.xlabel('Tasa de Falsos Positivos')
+                plt.ylabel('Tasa de Verdaderos Positivos')
+                plt.title(f'Curva ROC - {self.model_name}')
+                plt.legend(loc="lower right")
+            else:
+                # Multiclass classification
+                y_test_bin = label_binarize(y_test, classes=np.unique(y_test))
+                
+                # Compute ROC curve and ROC area for each class
+                fpr = dict()
+                tpr = dict()
+                roc_auc = dict()
+                
+                for i in range(n_classes):
+                    fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_proba[:, i])
+                    roc_auc[i] = auc(fpr[i], tpr[i])
+                
+                # Plot ROC curves for each class
+                colors = plt.cm.Set1(np.linspace(0, 1, n_classes))
+                for i, color in zip(range(n_classes), colors):
+                    plt.plot(fpr[i], tpr[i], color=color, lw=2,
+                            label=f'ROC clase {i} (AUC = {roc_auc[i]:.2f})')
+                
+                plt.plot([0, 1], [0, 1], 'k--', lw=2)
+                plt.xlim([0.0, 1.0])
+                plt.ylim([0.0, 1.05])
+                plt.xlabel('Tasa de Falsos Positivos')
+                plt.ylabel('Tasa de Verdaderos Positivos')
+                plt.title(f'Curva ROC Multiclase - {self.model_name}')
+                plt.legend(loc="lower right")
+            
+            # Save to base64
+            buffer = BytesIO()
+            plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+            buffer.seek(0)
+            image_base64 = base64.b64encode(buffer.getvalue()).decode()
+            plt.close()
+            
+            return {
+                'model_name': self.model_name,
+                'roc_curve_png': image_base64,
+                'format': 'png',
+                'encoding': 'base64'
+            }
+        except Exception as e:
+            return {'error': f'Failed to generate ROC curve PNG: {str(e)}'}
+
+    def generate_learning_curve_png(self):
+        """
+        Generate learning curve as PNG image (base64 encoded).
+        
+        Returns:
+            A dictionary containing the PNG image as base64 string.
+        """
+        try:
+            if not self.training_data:
+                return {"error": "No training data available for learning curve generation"}
+            
+            import matplotlib.pyplot as plt
+            from sklearn.model_selection import learning_curve
+            import numpy as np
+            import base64
+            from io import BytesIO
+            
+            X_train = self.training_data['X_train']
+            y_train = self.training_data['y_train']
+            
+            # Generate learning curve data
+            train_sizes, train_scores, val_scores = learning_curve(
+                self.model, X_train, y_train, 
+                cv=5, 
+                n_jobs=-1,
+                train_sizes=np.linspace(0.1, 1.0, 10),
+                scoring='accuracy'
+            )
+            
+            # Calculate mean and standard deviation
+            train_mean = np.mean(train_scores, axis=1)
+            train_std = np.std(train_scores, axis=1)
+            val_mean = np.mean(val_scores, axis=1)
+            val_std = np.std(val_scores, axis=1)
+            
+            # Create the plot
+            plt.figure(figsize=(10, 6))
+            
+            # Plot training scores
+            plt.plot(train_sizes, train_mean, 'o-', color='blue', label='Puntuación de Entrenamiento')
+            plt.fill_between(train_sizes, train_mean - train_std, train_mean + train_std, alpha=0.1, color='blue')
+            
+            # Plot validation scores
+            plt.plot(train_sizes, val_mean, 'o-', color='red', label='Puntuación de Validación')
+            plt.fill_between(train_sizes, val_mean - val_std, val_mean + val_std, alpha=0.1, color='red')
+            
+            plt.xlabel('Tamaño del Conjunto de Entrenamiento')
+            plt.ylabel('Puntuación de Accuracy')
+            plt.title(f'Curva de Aprendizaje - {self.model_name}')
+            plt.legend(loc='best')
+            plt.grid(True, alpha=0.3)
+            
+            # Save to base64
+            buffer = BytesIO()
+            plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+            buffer.seek(0)
+            image_base64 = base64.b64encode(buffer.getvalue()).decode()
+            plt.close()
+            
+            return {
+                'model_name': self.model_name,
+                'learning_curve_png': image_base64,
+                'format': 'png',
+                'encoding': 'base64'
+            }
+        except Exception as e:
+            return {'error': f'Failed to generate learning curve PNG: {str(e)}'}
+
+    def generate_plots_png(self):
+        """
+        Generate all plots as PNG images for classification models.
+        
+        Returns:
+            A dictionary containing all PNG images as base64 strings.
+        """
         return {
             'confusion_matrix': self.generate_confusion_matrix_png(),
+            'roc_curve': self.generate_roc_png(),
+            'learning_curve': self.generate_learning_curve_png(),
             'model_name': self.model_name
         }
