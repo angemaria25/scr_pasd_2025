@@ -950,13 +950,13 @@ def prediction_tab():
                                                         help="Resultado de la clasificación"
                                                     )
                                                     
-                                                    if pred_class == 1:
-                                                        st.success(f"🎯 **Resultado: POSITIVO** (Clase {pred_class})")
-                                                    else:
-                                                        st.info(f"🎯 **Resultado: NEGATIVO** (Clase {pred_class})")
+                                                    #if pred_class == 1:
+                                                        #st.success(f" **Resultado: POSITIVO** (Clase {pred_class})")
+                                                    #else:
+                                                        #st.info(f" **Resultado: NEGATIVO** (Clase {pred_class})")
                                                         
                                                 else:
-                                                    st.success(f"🎯 **Predicción:** {pred_value}")
+                                                    st.success(f" **Predicción:** {pred_value}")
                                                     
                                             else:
                                                 st.error(f"❌ Error en la predicción para `{model_name}`: {prediction_response.text}")
@@ -1000,21 +1000,32 @@ st.sidebar.markdown("Limpia todos los modelos entrenados y datasets cargados.")
 
 if st.sidebar.button("🗑️ Limpiar Todo", type="secondary", use_container_width=True):
     try:
-        # Clear session state
-        st.session_state['uploaded_files'] = {}
-        st.session_state['file_configs'] = {}
-        st.session_state['last_training_results'] = None
+        # Clear ALL session state completely
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        
+        # Reinitialize with defaults
+        ensure_session_state()
+        
+        # Clear any Streamlit caches
+        st.cache_data.clear()
+        if hasattr(st, 'cache_resource'):
+            st.cache_resource.clear()
         
         # Try to clear backend data
+        backend_cleared = False
         try:
             clear_response = requests.post('http://localhost:8000/clear_all', timeout=10)
             if clear_response.status_code == 200:
+                backend_cleared = True
                 st.sidebar.success("✅ Memoria limpiada exitosamente")
             else:
                 st.sidebar.warning("⚠️ Memoria local limpiada, pero el backend puede tener datos residuales")
-        except Exception:
-            st.sidebar.warning("⚠️ Memoria local limpiada, pero no se pudo conectar al backend")
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ Memoria local limpiada, pero no se pudo conectar al backend: {e}")
         
+        # Force a complete page refresh
         st.rerun()
+        
     except Exception as e:
         st.sidebar.error(f"❌ Error limpiando memoria: {e}")
